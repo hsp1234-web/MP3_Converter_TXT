@@ -101,3 +101,20 @@ def get_logger(name: str, log_queue: Optional[mp.Queue] = None) -> logging.Logge
             logger.warning("未提供日誌佇列，日誌將輸出到控制台。")
 
     return logger
+
+
+def get_null_logger() -> logging.Logger:
+    """
+    獲取一個「空」日誌記錄器。
+
+    這個 logger 會忽略所有發送給它的訊息，不執行任何 I/O 操作。
+    這在測試情境下非常有用，當我們不關心特定模組的日誌輸出時，
+    可以傳遞這個 logger 來避免不必要的控制台雜訊或檔案寫入。
+
+    Returns:
+        logging.Logger: 一個不執行任何操作的 logger 物件。
+    """
+    logger = logging.getLogger("null")
+    logger.addHandler(logging.NullHandler())
+    logger.propagate = False  # 確保日誌事件不會被傳播到上層 logger
+    return logger

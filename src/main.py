@@ -136,6 +136,22 @@ async def websocket_endpoint(websocket: WebSocket):
             manager.disconnect(websocket)
 
 
+# --- 佇列存取輔助函式 ---
+# 這些函式提供了一個清晰的介面來獲取應用程式範圍內的佇列，
+# 這對於在測試中注入或監控佇列特別有用。
+
+def get_task_queue() -> Queue:
+    """返回全域任務佇列。"""
+    return task_queue
+
+def get_result_queue() -> Queue:
+    """返回全域結果佇列。"""
+    return result_queue
+
+def get_log_queue() -> Queue:
+    """返回全域日誌佇列。"""
+    return log_queue
+
 # --- 掛載靜態檔案 ---
 # 這行必須放在後面，以免覆蓋 '/' 等 API 端點
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

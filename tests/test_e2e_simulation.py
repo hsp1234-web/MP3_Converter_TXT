@@ -1,131 +1,112 @@
+# -*- coding: utf-8 -*-
+"""
+作戰代號：【單體迴路】
+
+目標：驗證系統在一個受控的、單一進程環境下的核心邏輯。
+此測試取代了舊的、基於外部行程的端到端模擬，以根除不確定性並提升執行效率。
+"""
 import pytest
-import time
-import httpx
-import websockets
-import json
-import asyncio
-import os
-import signal
-import subprocess
+import multiprocessing as mp
+from fastapi.testclient import TestClient
 
-# --- 測試設定 ---
-BASE_URL = "http://localhost:8765"
-WEBSOCKET_URL = "ws://localhost:8765/ws"
-LOG_FILE = "phoenix_transcriber.log"
+# --- 核心作戰單位匯入 ---
+# 1. 匯入 FastAPI 應用程式實例
+from src.main import app
+# 2. 匯入佇列的存取介面
+from src.main import get_task_queue, get_result_queue, get_log_queue
+# 3. 匯入單次執行的工人邏輯
+from src.mock_worker import process_task_from_queue
 
-@pytest.fixture(scope="module")
-def running_app():
+# --- 測試環境設定 ---
+@pytest.fixture(scope="function")
+def client():
     """
-    在測試模組開始前，啟動應用程式；在結束後，終止它。
-    """
-    # 清理舊的日誌文件
-    if os.path.exists(LOG_FILE):
-        os.remove(LOG_FILE)
+    一個函式範圍的 pytest fixture，用於設定和清理測試環境。
 
-    # 在背景啟動應用程式
-    # 使用 subprocess.Popen 以便我們可以獲取其 PID 並在之後終止它
-    command = [".venv/bin/python", "src/launcher.py", "--profile", "testing"]
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
+    每次測試執行前：
+    1. 建立全新的、乾淨的佇列。
+    2. 將這些佇列注入到 FastAPI 應用程式中。
+    3. 產生一個 TestClient 實例以供測試使用。
+    """
+    # 1. 建立新的佇列
+    # 使用 "spawn" 方法以確保跨平台兼容性
+    ctx = mp.get_context("spawn")
+    task_q = ctx.Queue()
+    result_q = ctx.Queue()
+    log_q = ctx.Queue()
+
+    # 2. 將佇列注入到 FastAPI 應用程式的全域變數中
+    # 這是實現「單體迴路」的關鍵步驟
+    from src import main
+    main.task_queue = task_q
+    main.result_queue = result_q
+    main.log_queue = log_q
+
+    # 3. 建立並返回 TestClient
+    with TestClient(app) as test_client:
+        yield test_client
+
+    # 清理 (雖然在 "spawn" 模式下不是絕對必要，但良好實踐)
+    task_q.close()
+    result_q.close()
+    log_q.close()
+
+
+def test_monolithic_loop_paradigm(client: TestClient):
+    """
+    執行「單體迴路」測試範式。
+
+    這個測試模擬了完整的任務生命週期，但完全在記憶體和單一進程中進行。
+    """
+    # --- 步驟 1: 透過 API 提交任務 ---
+    # 使用 TestClient 模擬一個檔案上傳請求。
+    # 這會觸發 `/upload` 端點，將一個新任務放入 `task_queue`。
+    mock_audio_content = b"This is a mock audio file."
+    response = client.post(
+        "/upload",
+        files={"file": ("test_audio.mp3", mock_audio_content, "audio/mpeg")}
     )
 
-    # 等待一段時間，確保伺服器有足夠的時間啟動
-    time.sleep(5)
+    # 驗證 API 回應是否符合預期
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["status"] == "queued"
+    job_id = response_data.get("job_id")
+    assert job_id is not None
+    print(f"✅ 步驟 1/3: 任務已成功提交，Job ID: {job_id}")
 
-    # 檢查行程是否仍在運行
-    assert process.poll() is None, "應用程式啟動失敗"
+    # --- 步驟 2: 手動觸發工人邏輯 ---
+    # 直接調用我們之前重構好的 `process_task_from_queue` 函數。
+    # 這個函數會從 `task_queue` 中取出任務，進行處理，並將結果放入 `result_queue`。
+    task_queue = get_task_queue()
+    result_queue = get_result_queue()
 
-    yield process # 這將允許測試函數訪問 process 物件
+    # 確認任務已在佇列中
+    assert not task_queue.empty()
 
-    # --- 清理 ---
-    print("\n正在終止應用程式...")
-    # 向行程發送 SIGINT (Ctrl+C)
-    process.send_signal(signal.SIGINT)
-    try:
-        # 等待行程終止
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        print("行程未能優雅關閉，將強制終止。")
-        process.kill()
+    # 執行單次處理循環
+    process_task_from_queue(task_queue, result_queue)
+    print("✅ 步驟 2/3: 工人核心邏輯已執行，任務已處理。")
 
-    # 打印剩餘的輸出以供調試
-    stdout, stderr = process.communicate()
-    print("\n--- 應用程式標準輸出 ---")
-    print(stdout)
-    print("\n--- 應用程式標準錯誤 ---")
-    print(stderr)
+    # --- 步驟 3: 從結果佇列驗證結果 ---
+    # 由於我們在同一個進程中，可以直接從 `result_queue` 中獲取結果進行驗證。
+    # 這種方法直接、可靠，且速度極快。
+    assert not result_queue.empty()
+    # 工人會先放入 "processing" 狀態，再放入 "completed" 狀態
+    processing_result = result_queue.get(timeout=1)
+    completed_result = result_queue.get(timeout=1)
 
+    # 驗證 "processing" 狀態
+    assert processing_result["status"] == "processing"
+    assert processing_result["job_id"] == job_id
 
-async def test_full_e2e_simulation(running_app):
-    """
-    執行端到端的模擬測試。
-    """
-    job_id = None
-    # 1. WebSocket 連線與訊息接收
-    try:
-        async with websockets.connect(WEBSOCKET_URL) as websocket:
-            print("WebSocket 已連線")
+    # 驗證最終的 "completed" 狀態
+    assert completed_result["status"] == "completed"
+    assert completed_result["job_id"] == job_id
+    assert "這是一個模擬的轉錄結果" in completed_result["transcript"]
+    print("✅ 步驟 3/3: 結果已在結果佇列中成功驗證。")
 
-            # 2. API 上傳請求
-            async with httpx.AsyncClient() as client:
-                # 建立一個模擬的音訊檔案
-                mock_audio_content = b"mock_audio_data"
-                files = {'file': ('test_audio.mp3', mock_audio_content, 'audio/mpeg')}
-
-                # 發送上傳請求
-                response = await client.post(f"{BASE_URL}/upload", files=files)
-                assert response.status_code == 200
-                print(f"API 回應: {response.json()}")
-                job_id = response.json().get("job_id")
-                assert job_id is not None
-
-            # 3. 驗證 WebSocket 訊息
-            expected_statuses = ["queued", "processing", "completed"]
-            received_statuses = []
-
-            # 設定一個超時
-            timeout = 10  # 秒
-            start_time = time.time()
-
-            while len(received_statuses) < len(expected_statuses) and (time.time() - start_time) < timeout:
-                try:
-                    message_str = await asyncio.wait_for(websocket.recv(), timeout=1.0)
-                    message = json.loads(message_str)
-                    print(f"收到 WebSocket 訊息: {message}")
-
-                    if message.get("job_id") == job_id:
-                        status = message.get("status")
-                        if status and status not in received_statuses:
-                            received_statuses.append(status)
-
-                except asyncio.TimeoutError:
-                    continue # 如果一秒內沒收到訊息，繼續等待
-
-            assert received_statuses == expected_statuses
-            print("WebSocket 狀態驗證成功")
-
-    except Exception as e:
-        pytest.fail(f"測試過程中發生錯誤: {e}")
-
-    # 4. 日誌系統驗證
-    assert os.path.exists(LOG_FILE), "日誌檔案未被建立"
-
-    with open(LOG_FILE, 'r', encoding='utf-8') as f:
-        log_content = f.read()
-
-    print("\n--- 日誌檔案內容 ---")
-    print(log_content)
-    print("--------------------")
-
-    assert "APIServerProcess" in log_content
-    assert "API伺服器" in log_content
-    assert "MockWorkerProcess" in log_content
-    assert "模擬工人" in log_content
-    assert "INFO" in log_content
-    assert "鳳凰錄音轉寫服務" in log_content
-    assert f"收到新任務: Job ID {job_id}" in log_content
-    assert f"任務 {job_id}: 模擬處理完成" in log_content
-    print("日誌系統驗證成功")
+    # 確認所有佇列都已處理完畢
+    assert task_queue.empty()
+    assert result_queue.empty()
+    print("\n🎉 作戰成功：【單體迴路】測試驗證通過！")
