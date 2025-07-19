@@ -173,17 +173,28 @@ def run_server(profile):
 def install_deps():
     """
     使用 uv 安裝或更新專案所需的所有 Python 依賴套件。
+    如果 uv 不存在，會先自動安裝。
     """
+    # --- 步驟 1: 檢查 uv 是否存在 ---
+    try:
+        subprocess.check_call([sys.executable, "-m", "uv", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        click.echo("==> uv 已安裝。")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        click.echo("==> 'uv' 未找到，正在自動安裝...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"])
+            click.secho("==> uv 安裝成功。", fg="green")
+        except subprocess.CalledProcessError as e:
+            click.secho(f"==> uv 安裝失敗: {e}", fg="red")
+            sys.exit(1)
+
+    # --- 步驟 2: 使用 uv 安裝依賴 ---
     click.echo("==> 正在使用 uv 安裝/更新依賴套件 (來自 pyproject.toml)...")
     try:
-        # 我們假設 uv 已經在環境中可用
         subprocess.check_call([sys.executable, "-m", "uv", "pip", "install", "-p", sys.executable, "."])
         click.secho("==> 依賴套件安裝成功。", fg="green")
     except subprocess.CalledProcessError as e:
         click.secho(f"==> 依賴套件安裝失敗: {e}", fg="red")
-        sys.exit(1)
-    except FileNotFoundError:
-        click.secho("==> 錯誤: 'uv' 未找到。請確保 uv 已被正確安裝。", fg="red")
         sys.exit(1)
 
 
