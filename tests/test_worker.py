@@ -16,7 +16,7 @@ def test_worker_success_scenario(db_connection):
 
     # Act
     # 在這個測試中，我們需要一個模擬的日誌佇列
-    from src.logger import get_logger
+    from src.core import get_logger
     # 初始化一個假的日誌記錄器，這樣就不會因為沒有佇列而報錯
     get_logger("轉錄工人")
     process_single_task(db_connection)

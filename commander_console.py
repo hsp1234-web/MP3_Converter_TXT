@@ -22,10 +22,10 @@ import multiprocessing as mp
 
 # 由於我們已經將 src 加入 sys.path，可以直接從 src 導入
 from src.main import app
-from src.config import get_config
+from src.core import get_config
 from src.transcriber_worker import transcriber_worker_process
 from src.mock_worker import mock_worker_process
-from src.logger import get_logger, log_writer_process
+from src.core import get_logger, log_writer_process
 
 def start_api_server(log_queue: mp.Queue, task_queue: mp.Queue, result_queue: mp.Queue, config):
     """
@@ -172,28 +172,38 @@ def run_server(profile):
 @cli.command(name="install-deps")
 def install_deps():
     """
-    安裝或更新專案所需的所有 Python 依賴套件。
+    使用 uv 安裝或更新專案所需的所有 Python 依賴套件。
     """
-    click.echo("==> 正在安裝/更新依賴套件 (來自 requirements.txt)...")
+    click.echo("==> 正在使用 uv 安裝/更新依賴套件 (來自 pyproject.toml)...")
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+        # 我們假設 uv 已經在環境中可用
+        subprocess.check_call([sys.executable, "-m", "uv", "pip", "install", "-p", sys.executable, "."])
         click.secho("==> 依賴套件安裝成功。", fg="green")
     except subprocess.CalledProcessError as e:
         click.secho(f"==> 依賴套件安裝失敗: {e}", fg="red")
         sys.exit(1)
     except FileNotFoundError:
-        click.secho("==> 錯誤: 'pip' 未找到。請確保 Python 與 pip 已被正確安裝。", fg="red")
+        click.secho("==> 錯誤: 'uv' 未找到。請確保 uv 已被正確安裝。", fg="red")
         sys.exit(1)
 
 
 @cli.command(name="run-tests")
 def run_tests():
     """
-    執行專案的自動化測試套件 (使用 pytest)。
+    執行完整的自動化測試套件，並自動設定正確的 PYTHONPATH。
     """
-    click.echo("==> 正在執行自動化測試...")
+    click.echo("==> 正在設定測試環境...")
+    test_env = os.environ.copy()
+    # 關鍵修正：將專案根目錄加入 PYTHONPATH，讓測試能找到模組
+    project_root = os.path.abspath(os.path.dirname(__file__))
+    current_pythonpath = test_env.get("PYTHONPATH", "")
+    test_env["PYTHONPATH"] = f".:{current_pythonpath}"
+
+    click.echo(f"==> PYTHONPATH 已設定為: {test_env['PYTHONPATH']}")
+    click.echo("==> 正在啟動 pytest...")
     try:
-        subprocess.check_call([sys.executable, "-m", "pytest"])
+        # 使用修改後的環境變數來執行測試
+        subprocess.check_call([sys.executable, "-m", "pytest", "-v"], env=test_env)
         click.secho("==> 所有測試皆已通過。", fg="green")
     except subprocess.CalledProcessError as e:
         click.secho(f"==> 測試失敗: {e}", fg="red")

@@ -18,7 +18,7 @@ def db_connection():
     """
     提供一個乾淨的、用於測試的 SQLite 資料庫連線。
     """
-    from src.database import DATABASE_FILE, initialize_database
+    from src.core import DATABASE_FILE, initialize_database
 
     if os.path.exists(DATABASE_FILE):
         os.remove(DATABASE_FILE)

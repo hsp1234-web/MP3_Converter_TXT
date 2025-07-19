@@ -1,7 +1,7 @@
 import sqlite3
 import time
-from src.logger import get_logger
-from src.database import DATABASE_FILE
+from src.core import get_logger
+from src.core import DATABASE_FILE
 
 def process_single_task(db_connection):
     """

@@ -1,6 +1,6 @@
 import multiprocessing as mp
 import time
-from src.logger import get_logger, get_null_logger
+from src.core import get_logger, get_null_logger
 
 def process_task_from_queue(task_queue: mp.Queue, result_queue: mp.Queue, logger=None):
     """

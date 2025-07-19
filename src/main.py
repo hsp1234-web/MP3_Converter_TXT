@@ -8,8 +8,8 @@ import logging
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from src.logger import get_logger
-from src.database import initialize_database, DATABASE_FILE, UPLOAD_DIR
+from src.core import get_logger
+from src.core import initialize_database, DATABASE_FILE, UPLOAD_DIR
 
 # --- Pre-emptive directory creation ---
 static_dir = Path("static")

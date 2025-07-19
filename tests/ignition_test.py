@@ -3,8 +3,7 @@ import pytest
 def test_import_all():
     try:
         from src import main
-        from src import config
-        from src import logger
+        from src import core
         from src import queues
         from src import transcriber_worker
         from src import mock_worker
