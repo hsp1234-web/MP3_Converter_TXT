@@ -3,6 +3,7 @@ import aiofiles
 from pathlib import Path
 import sqlite3
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse
@@ -99,3 +100,22 @@ async def get_task_status(task_id: str, db: sqlite3.Connection = Depends(get_db)
 
 # --- Mount Static Files ---
 app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+
+if __name__ == "__main__":
+    import uvicorn
+    # 當直接執行此檔案時，設定一個備用的日誌系統
+    if not logger.handlers or isinstance(logger.handlers[0], logging.StreamHandler):
+        # 移除預設的 StreamHandler
+        if logger.hasHandlers():
+            logger.handlers.clear()
+
+        # 設定一個基本的檔案日誌
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            filename='main_direct_run.log',
+            filemode='w'
+        )
+        logger.info("以直接執行模式啟動，使用 main_direct_run.log 進行日誌記錄。")
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
