@@ -1,9 +1,9 @@
 import multiprocessing as mp
-from faster_whisper import WhisperModel
-from src.core.hardware import get_best_hardware_config
 from src.logger import get_logger
 
 def transcriber_worker_process(log_queue: mp.Queue, task_queue: mp.Queue, result_queue: mp.Queue, config):
+    from faster_whisper import WhisperModel
+    from src.core.hardware import get_best_hardware_config
     """
     轉錄工人行程的主循環。
 

@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.main import app
 from src.config import get_config
 from src.transcriber_worker import transcriber_worker_process
+from src.mock_worker import mock_worker_process
 from src.logger import get_logger, log_writer_process
 
 # --- 函式定義 ---
@@ -80,11 +81,20 @@ def main(args):
         )
         processes.append(api_process)
 
-        # 3. 智慧工人行程
+        # 3. 智慧工人行程 (根據環境選擇)
+        if args.profile == "testing":
+            logger.info("偵測到 'testing' 環境，將啟動模擬工人。")
+            worker_target = mock_worker_process
+            worker_name = "MockWorkerProcess"
+        else:
+            logger.info("將啟動真實的轉錄工人。")
+            worker_target = transcriber_worker_process
+            worker_name = "IntelligentWorkerProcess"
+
         worker_process_instance = mp.Process(
-            target=transcriber_worker_process,
+            target=worker_target,
             args=(log_queue, task_queue, result_queue, config),
-            name="IntelligentWorkerProcess"
+            name=worker_name
         )
         processes.append(worker_process_instance)
 
