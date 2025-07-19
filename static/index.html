@@ -1,11 +1,145 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phoenix Transcriber</title>
+    <title>鳳凰轉錄儀 v1.1</title>
+    <style>
+        body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; background-color: #1a1a1a; color: #e0e0e0; max-width: 800px; margin: 2rem auto; padding: 1rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        h1, h2 { color: #f0a048; border-bottom: 2px solid #f0a048; padding-bottom: 0.5rem; }
+        #drop-zone { border: 2px dashed #444; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: background-color 0.3s, border-color 0.3s; }
+        #drop-zone.dragover { background-color: #2a2a2a; border-color: #f0a048; }
+        #file-input { display: none; }
+        #status-container { margin-top: 1.5rem; padding: 1rem; background-color: #252525; border-radius: 8px; min-height: 50px; }
+        .status-item { background-color: #333; padding: 0.8rem; border-radius: 5px; margin-bottom: 0.5rem; font-size: 0.95rem; }
+        .status-item.progress { border-left: 4px solid #5aa_f_de; }
+        .status-item.result { border-left: 4px solid #4CAF50; white-space: pre-wrap; word-wrap: break-word; }
+        .status-item.error { border-left: 4px solid #f44336; }
+        .status-item strong { color: #f0a048; }
+        #ws-status { font-size: 0.8rem; text-align: right; color: #888; padding-top: 0.5rem; }
+    </style>
 </head>
 <body>
-    <h1>Phoenix Transcriber v1.1</h1>
+    <h1>鳳凰轉錄儀 v1.1 - 模擬作戰</h1>
+    <p>這是一個輕量化的測試骨架，用於驗證端對端的應用流程。</p>
+
+    <div id="drop-zone">
+        <p>將檔案拖放到此處，或點擊選擇檔案</p>
+        <input type="file" id="file-input" multiple>
+    </div>
+
+    <h2>即時狀態回報</h2>
+    <div id="status-container">
+        <div id="ws-status">WebSocket: 未連線</div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const statusContainer = document.getElementById('status-container');
+        const wsStatus = document.getElementById('ws-status');
+        let socket;
+
+        function connectWebSocket() {
+            const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            socket = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${clientId}`);
+
+            socket.onopen = () => {
+                console.log('WebSocket 已連線');
+                wsStatus.textContent = 'WebSocket: 已連線';
+                wsStatus.style.color = '#4CAF50';
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('收到訊息:', data);
+                displayStatus(data);
+            };
+
+            socket.onclose = () => {
+                console.log('WebSocket 已斷線，嘗試重新連線...');
+                wsStatus.textContent = 'WebSocket: 已斷線，3秒後重試...';
+                wsStatus.style.color = '#f44336';
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            socket.onerror = (error) => {
+                console.error('WebSocket 錯誤:', error);
+                wsStatus.textContent = 'WebSocket: 發生錯誤';
+                wsStatus.style.color = '#f44336';
+            };
+        }
+
+        function displayStatus(data) {
+            const item = document.createElement('div');
+            item.classList.add('status-item', data.type);
+
+            let content = `<strong>任務 ${data.job_id.substring(0, 8)}:</strong> `;
+            if (data.type === 'progress') {
+                content += data.message;
+            } else if (data.type === 'result') {
+                content += `轉錄完成。\n${data.transcript}`;
+            } else if (data.type === 'error') {
+                content += `發生錯誤: ${data.message}`;
+            } else {
+                 content += `未知訊息類型: ${JSON.stringify(data)}`;
+            }
+
+            item.textContent = content;
+            statusContainer.insertBefore(item, wsStatus);
+        }
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('上傳成功:', data);
+                displayStatus({
+                    job_id: data.job_id,
+                    type: 'progress',
+                    message: `✅ ${file.name} 已成功上傳，等待處理...`
+                });
+            })
+            .catch(error => {
+                console.error('上傳失敗:', error);
+                displayStatus({
+                    job_id: 'N/A',
+                    type: 'error',
+                    message: `❌ ${file.name} 上傳失敗。`
+                });
+            });
+        }
+
+        // --- Event Listeners ---
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+            [...fileInput.files].forEach(uploadFile);
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            [...e.dataTransfer.files].forEach(uploadFile);
+        });
+
+        // --- Initial connection ---
+        connectWebSocket();
+    </script>
 </body>
 </html>
