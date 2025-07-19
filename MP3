@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鳳凰轉錄儀 | 指揮中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- 引入 Lucide Icons (取代 Phosphor Icons) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            /* 亮色主題變數 (預設) */
+            --bg-color: #f0f2f5;
+            --text-color: #1f2937;
+            --text-muted-color: #6b7280;
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(0, 0, 0, 0.1);
+            --status-icon-color-cpu: #2563eb;
+            --status-icon-color-gpu: #9333ea;
+            --status-icon-color-system: #db2777;
+            --log-hover-bg: rgba(0, 0, 0, 0.05);
+            --border-color: #e5e7eb;
+            --progress-bg: #e5e7eb;
+            --progress-fill: #3b82f6;
+        }
+
+        html.dark {
+            /* 暗色主題變數 */
+            --bg-color: #121212;
+            --text-color: #e5e7eb;
+            --text-muted-color: #9ca3af;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --status-icon-color-cpu: #38bdf8;
+            --status-icon-color-gpu: #c084fc;
+            --status-icon-color-system: #f472b6;
+            --log-hover-bg: rgba(255, 255, 255, 0.08);
+            --border-color: #374151;
+            --progress-bg: #374151;
+            --progress-fill: #60a5fa;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .gemini-gradient-text {
+            background: linear-gradient(90deg, #89CFF0, #A688FA, #F482A4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-fill-color: transparent;
+        }
+        .glass-effect {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            transition: background 0.3s, border-color 0.3s;
+        }
+        .log-entry:hover {
+            background-color: var(--log-hover-bg);
+        }
+        /* 自定義滾動條樣式 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); border-radius: 10px; }
+        html.dark ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+        ::-webkit-scrollbar-thumb { background: linear-gradient(to bottom, #A688FA, #89CFF0); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: linear-gradient(to bottom, #F482A4, #A688FA); }
+        
+        /* 進度條樣式 */
+        .progress-bar {
+            width: 100%; height: 8px; background-color: var(--progress-bg);
+            border-radius: 4px; overflow: hidden; margin-top: 4px;
+        }
+        .progress-bar-fill {
+            height: 100%; background-color: var(--progress-fill);
+            border-radius: 4px; transition: width 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="text-gray-800 dark:text-gray-200">
+
+    <div class="min-h-screen w-full p-4 sm:p-6 lg:p-8 flex flex-col">
+
+        <!-- 標題與設定 -->
+        <header class="mb-6 flex items-center justify-between">
+            <h1 class="text-2xl sm:text-3xl font-bold gemini-gradient-text flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="mr-3" viewBox="0 0 16 16">
+                    <path d="M8.532 1.542a.5.5 0 0 0-.64-.018L1.56 5.166a.5.5 0 0 0-.153.385v5.9a.5.5 0 0 0 .153.385l6.333 3.646a.5.5 0 0 0 .64.018l6.333-3.646a.5.5 0 0 0 .153-.385v-5.9a.5.5 0 0 0-.153-.385L8.532 1.542zM8 1.192l6.012 3.47L8 8.133 1.988 4.662 8 1.192zM1.5 5.85l5.941 3.43-5.941 3.43V5.85zm6.941 6.86L2.5 9.28l5.941-3.43 5.941 3.43-5.941 3.43zM14.5 5.85v5.899l-5.941-3.43 5.941-3.43z"/>
+                </svg>
+                鳳凰轉錄儀指揮中心
+            </h1>
+            <div class="flex items-center gap-2 sm:gap-4">
+                <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-500/20 transition-colors">
+                    <!-- Lucide Icons for theme toggle -->
+                    <i data-lucide="sun" class="lucide lucide-sun text-xl text-[color:var(--text-color)] block dark:hidden"></i>
+                    <i data-lucide="moon" class="lucide lucide-moon text-xl text-[color:var(--text-color)] hidden dark:block"></i>
+                </button>
+                <div class="flex items-center gap-1">
+                    <button id="font-decrease" class="p-2 rounded-full hover:bg-gray-500/20 transition-colors">
+                        <!-- Lucide Icons for font decrease -->
+                        <i data-lucide="type" class="lucide lucide-type text-lg text-[color:var(--text-color)]"></i>
+                    </button>
+                    <button id="font-increase" class="p-2 rounded-full hover:bg-gray-500/20 transition-colors">
+                        <!-- Lucide Icons for font increase -->
+                        <i data-lucide="type" class="lucide lucide-type text-lg text-[color:var(--text-color)] scale-125"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 效能分析面板 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="glass-effect rounded-xl p-4 flex items-center gap-4">
+                <i data-lucide="cpu" class="lucide lucide-cpu text-4xl" style="color: var(--status-icon-color-cpu);"></i>
+                <div>
+                    <h3 class="font-semibold text-[color:var(--text-muted-color)]">核心分析 (CPU)</h3>
+                    <p id="cpu-usage" class="text-2xl font-bold text-[color:var(--text-color)]">--%</p>
+                </div>
+            </div>
+            <div class="glass-effect rounded-xl p-4 flex items-center gap-4">
+                <i data-lucide="monitor" class="lucide lucide-monitor text-4xl" style="color: var(--status-icon-color-gpu);"></i>
+                <div>
+                    <h3 class="font-semibold text-[color:var(--text-muted-color)]">顯示卡分析 (GPU)</h3>
+                    <p id="gpu-usage" class="text-2xl font-bold text-[color:var(--text-color)]">--%</p>
+                </div>
+            </div>
+            <div class="glass-effect rounded-xl p-4 flex items-center gap-4">
+                <i data-lucide="activity" class="lucide lucide-activity text-4xl" style="color: var(--status-icon-color-system);"></i>
+                <div>
+                    <h3 class="font-semibold text-[color:var(--text-muted-color)]">系統狀態</h3>
+                    <p id="system-status" class="text-2xl font-bold text-[color:var(--text-color)]">初始化</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
+            <!-- 左側：上傳與任務池 -->
+            <div class="flex flex-col gap-6 min-h-0">
+                <div id="upload-area" class="glass-effect rounded-xl p-6 border-2 border-dashed border-gray-600/50 dark:border-gray-600 hover:border-sky-400 transition-all duration-300 flex flex-col items-center justify-center text-center">
+                    <i data-lucide="upload" class="lucide lucide-upload text-5xl gemini-gradient-text mb-4"></i>
+                    <h2 class="text-xl font-semibold text-[color:var(--text-color)] mb-2">拖曳音訊檔至此，或點擊選擇</h2>
+                    <p class="text-[color:var(--text-muted-color)]">支援 MP3, WAV, M4A, FLAC 等格式</p>
+                    <input type="file" id="file-input" class="hidden" multiple accept="audio/*">
+                </div>
+                <div class="glass-effect rounded-xl flex-grow flex flex-col min-h-0">
+                    <h2 class="text-lg font-semibold text-[color:var(--text-color)] p-4 border-b" style="border-color: var(--border-color);">任務進度池</h2>
+                    <div id="log-container" class="p-4 space-y-3 overflow-y-auto flex-grow h-64 lg:h-auto">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側：結果與待機畫面 -->
+            <!-- 調整此區塊的佈局，使其在格線中顯示更美觀 -->
+            <div class="min-h-0 flex flex-col">
+                <div id="standby-section" class="glass-effect rounded-xl flex flex-col items-center justify-center text-center p-8 flex-grow transition-opacity duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" class="gemini-gradient-text opacity-50 mb-6" viewBox="0 0 256 256"><path fill="currentColor" d="M208.23 200.1a12 12 0 0 1-16.46 16.46l-46-46a12 12 0 0 1 16.46-16.46ZM128 76a52 52 0 1 0 52 52a52.06 52.06 0 0 0-52-52Zm0 88a36 36 0 1 1 36-36a36 36 0 0 1-36 36Zm96-104a12 12 0 0 1-12 12h-32a12 12 0 0 1 0-24h32a12 12 0 0 1 12 12Zm-16.46-60.46a12 12 0 0 1 0 16.92l-22.63 22.63a12 12 0 0 1-16.92-16.92l22.63-22.63a12 12 0 0 1 16.92 0ZM128 32a12 12 0 0 1-12-12V8a12 12 0 0 1 24 0v12a12 12 0 0 1-12 12Zm-76.46 31.54a12 12 0 0 1-16.92 0l-22.63-22.63a12 12 0 0 1 16.92-16.92l22.63 22.63a12 12 0 0 1 0 16.92ZM60 128a12 12 0 0 1-12-12V84a12 12 0 0 1 24 0v32a12 12 0 0 1-12 12Z"/></svg>
+                    <h2 class="text-2xl font-bold text-[color:var(--text-muted-color)]">等待任務</h2>
+                    <p class="text-gray-500 mt-2">請上傳音訊檔以開始轉錄流程。</p>
+                </div>
+                <div id="result-section" class="glass-effect rounded-xl flex flex-col flex-grow transition-opacity duration-300 hidden">
+                    <div class="p-4 border-b flex justify-between items-center" style="border-color: var(--border-color);">
+                        <h2 class="text-lg font-semibold text-[color:var(--text-color)]">轉錄結果</h2>
+                        <div>
+                            <button id="copy-btn" class="bg-gray-200 dark:bg-gray-700 hover:bg-sky-500/80 dark:hover:bg-sky-500 text-gray-800 dark:text-gray-100 font-bold py-2 px-4 rounded-lg inline-flex items-center transition-all">
+                                <i data-lucide="copy" class="lucide lucide-copy mr-2"></i>
+                                <span>複製</span>
+                            </button>
+                            <button id="download-btn" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center transition-all ml-2">
+                                <i data-lucide="download" class="lucide lucide-download mr-2"></i>
+                                <span>下載 .txt</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-4 flex-grow overflow-y-auto">
+                        <pre id="transcript-output" class="whitespace-pre-wrap text-[color:var(--text-color)] leading-relaxed"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- 主要應用邏輯 ---
+        const main = () => {
+            // --- 獲取 DOM 元素 ---
+            const htmlEl = document.documentElement;
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const fontIncreaseBtn = document.getElementById('font-increase');
+            const fontDecreaseBtn = document.getElementById('font-decrease');
+            const uploadArea = document.getElementById('upload-area');
+            const fileInput = document.getElementById('file-input');
+            const logContainer = document.getElementById('log-container');
+            const systemStatusEl = document.getElementById('system-status');
+            const cpuUsageEl = document.getElementById('cpu-usage');
+            const gpuUsageEl = document.getElementById('gpu-usage');
+            const resultSection = document.getElementById('result-section');
+            const standbySection = document.getElementById('standby-section');
+            const transcriptOutput = document.getElementById('transcript-output');
+            const copyBtn = document.getElementById('copy-btn');
+            const downloadBtn = document.getElementById('download-btn');
+
+            // --- 核心函式 ---
+            const applyTheme = (theme) => {
+                htmlEl.classList.toggle('dark', theme === 'dark');
+                localStorage.setItem('theme', theme);
+                // Lucide Icons 無需手動 replace，它們會自動渲染
+                // 但為了確保在主題切換時，如果圖示有動態變化，可以呼叫 createIcons
+                if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                    lucide.createIcons();
+                }
+            };
+
+            const setFontSize = (size) => {
+                const newSize = Math.max(12, Math.min(size, 20)); // 限制字體大小在 12px 到 20px 之間
+                htmlEl.style.fontSize = `${newSize}px`;
+                localStorage.setItem('fontSize', newSize);
+            };
+
+            const addLog = (level, message) => {
+                const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+                const levelColor = { '系統': 'text-sky-400', '成功': 'text-green-400', '錯誤': 'text-red-400', '進度': 'text-yellow-400' }[level] || 'text-gray-400';
+                
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry p-2 rounded-md';
+                logEntry.innerHTML = `
+                    <div>
+                        <span class="text-gray-500 mr-2">[${timestamp}]</span>
+                        <span class="${levelColor}">[${level}]</span>
+                        <span class="ml-2 text-[color:var(--text-color)]">${message}</span>
+                    </div>`;
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight; // 自動滾動到底部
+                return logEntry;
+            };
+
+            const updateProgressBar = (logEntry, progress) => {
+                let bar = logEntry.querySelector('.progress-bar');
+                if (!bar) {
+                    bar = document.createElement('div');
+                    bar.className = 'progress-bar';
+                    bar.innerHTML = `<div class="progress-bar-fill"></div>`;
+                    logEntry.appendChild(bar);
+                }
+                bar.querySelector('.progress-bar-fill').style.width = `${progress}%`;
+            };
+
+            const handleFiles = (files) => {
+                if (files.length === 0) return;
+                transcriptOutput.textContent = ''; // 清空之前的轉錄結果
+                addLog('系統', `收到 ${files.length} 個檔案，準備加入佇列。`);
+                Array.from(files).forEach(uploadAndProcessFile);
+            };
+
+            const uploadAndProcessFile = (file) => {
+                const logEntry = addLog('進度', `開始處理檔案: ${file.name}`);
+                systemStatusEl.textContent = '轉錄中...';
+                
+                // 隱藏待機區塊，顯示結果區塊
+                standbySection.classList.add('hidden');
+                resultSection.classList.remove('hidden');
+
+                // 模擬處理時間和進度
+                const mockDuration = Math.random() * 4000 + 2000; // 2 到 6 秒
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 20;
+                    updateProgressBar(logEntry, progress);
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        const mockTranscript = `--- ${file.name} ---\n[00:00:01.123] 這是「${file.name}」的模擬轉錄結果。\n[00:00:08.456] 這種非阻塞的設計，讓每一個步驟都能獨立存在。\n\n`;
+                        logEntry.querySelector('div').insertAdjacentHTML('beforeend', `<span class="ml-2 text-green-400">完成</span>`);
+                        transcriptOutput.textContent += mockTranscript;
+                        
+                        systemStatusEl.textContent = '待命中';
+                    }
+                }, mockDuration / 5);
+            };
+
+            // --- 事件監聽器綁定 ---
+            themeToggleBtn.addEventListener('click', () => applyTheme(htmlEl.classList.contains('dark') ? 'light' : 'dark'));
+            fontIncreaseBtn.addEventListener('click', () => setFontSize(parseFloat(getComputedStyle(htmlEl).fontSize) + 1));
+            fontDecreaseBtn.addEventListener('click', () => setFontSize(parseFloat(getComputedStyle(htmlEl).fontSize) - 1));
+            
+            // 檔案上傳區域的事件處理
+            uploadArea.addEventListener('click', () => fileInput.click());
+            ['dragenter', 'dragover'].forEach(e => uploadArea.addEventListener(e, (evt) => { 
+                evt.preventDefault(); 
+                uploadArea.classList.add('border-sky-400'); 
+            }));
+            ['dragleave', 'drop'].forEach(e => uploadArea.addEventListener(e, (evt) => { 
+                evt.preventDefault(); 
+                uploadArea.classList.remove('border-sky-400'); 
+            }));
+            fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+            uploadArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+
+            // 複製按鈕功能
+            copyBtn.addEventListener('click', () => {
+                if (!transcriptOutput.textContent) return;
+                // 使用 document.execCommand('copy') 以在 iframe 環境中更可靠地複製
+                const textarea = document.createElement('textarea');
+                textarea.value = transcriptOutput.textContent;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+
+                const originalHTML = copyBtn.innerHTML;
+                copyBtn.innerHTML = `<i data-lucide="check" class="lucide lucide-check mr-2"></i><span>已複製！</span>`;
+                // Lucide Icons 無需手動 replace，但為了確保動態加入的圖示也能渲染，可以呼叫 createIcons
+                if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                    lucide.createIcons();
+                }
+                setTimeout(() => { 
+                    copyBtn.innerHTML = originalHTML; 
+                    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                        lucide.createIcons(); 
+                    }
+                }, 2000);
+            });
+
+            // 下載按鈕功能
+            downloadBtn.addEventListener('click', () => {
+                if (!transcriptOutput.textContent) return;
+                const blob = new Blob([transcriptOutput.textContent], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `transcript_${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}.txt`;
+                a.click();
+                URL.revokeObjectURL(url); // 釋放 URL 物件
+            });
+
+            // --- 初始化應用程式 ---
+            // 1. 應用儲存的設定（主題和字體大小）
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            applyTheme(savedTheme || (prefersDark ? 'dark' : 'light')); // 如果沒有儲存的主題，則根據系統偏好設定
+
+            const savedFontSize = localStorage.getItem('fontSize');
+            if (savedFontSize) setFontSize(parseFloat(savedFontSize));
+            
+            // 2. 模擬系統啟動訊息和效能數據更新
+            addLog('系統', '鳳凰轉錄儀已啟動，等待任務指令。');
+            setTimeout(() => addLog('成功', 'WebSocket 連線已建立 (模擬)。'), 1000);
+            setInterval(() => {
+                cpuUsageEl.textContent = `${(Math.random() * 20 + 10).toFixed(1)}%`;
+                gpuUsageEl.textContent = `${(Math.random() * 30 + 15).toFixed(1)}%`;
+            }, 2000);
+
+            // 3. 初始化 Lucide Icons
+            // 在 DOMContentLoaded 後呼叫 createIcons，確保所有 data-lucide 屬性都被處理
+            if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+                lucide.createIcons();
+            } else {
+                console.warn("Lucide Icons 函式庫未載入或 createIcons 方法不可用。圖示可能無法正常顯示。");
+            }
+        };
+
+        // 當 DOM 完全載入後，啟動應用程式
+        document.addEventListener('DOMContentLoaded', main);
+    </script>
+</body>
+</html>
