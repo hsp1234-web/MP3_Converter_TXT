@@ -2,97 +2,98 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>鳳凰轉錄儀 v1.1</title>
+    <title>鳳凰錄音轉寫服務</title>
     <style>
-        body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; background-color: #1a1a1a; color: #e0e0e0; max-width: 800px; margin: 2rem auto; padding: 1rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        h1, h2 { color: #f0a048; border-bottom: 2px solid #f0a048; padding-bottom: 0.5rem; }
-        #drop-zone { border: 2px dashed #444; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: background-color 0.3s, border-color 0.3s; }
-        #drop-zone.dragover { background-color: #2a2a2a; border-color: #f0a048; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 2rem; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #4a4a4a; text-align: center; }
+        #drop-zone { border: 2px dashed #007bff; border-radius: 5px; padding: 3rem; text-align: center; transition: background-color 0.2s ease; }
+        #drop-zone.dragover { background-color: #e9f5ff; }
         #file-input { display: none; }
-        #status-container { margin-top: 1.5rem; padding: 1rem; background-color: #252525; border-radius: 8px; min-height: 50px; }
-        .status-item { background-color: #333; padding: 0.8rem; border-radius: 5px; margin-bottom: 0.5rem; font-size: 0.95rem; }
-        .status-item.progress { border-left: 4px solid #5aa_f_de; }
-        .status-item.result { border-left: 4px solid #4CAF50; white-space: pre-wrap; word-wrap: break-word; }
-        .status-item.error { border-left: 4px solid #f44336; }
-        .status-item strong { color: #f0a048; }
-        #ws-status { font-size: 0.8rem; text-align: right; color: #888; padding-top: 0.5rem; }
+        .button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; transition: background-color 0.2s ease; }
+        .button:hover { background-color: #0056b3; }
+        #status { margin-top: 1.5rem; font-size: 1.1rem; text-align: center; color: #555; }
+        #progress-bar-container { width: 100%; background-color: #e0e0e0; border-radius: 5px; margin-top: 1rem; display: none; }
+        #progress-bar { width: 0%; height: 20px; background-color: #007bff; border-radius: 5px; text-align: center; color: white; line-height: 20px; }
+        #result { margin-top: 1.5rem; padding: 1rem; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; }
     </style>
 </head>
 <body>
-    <h1>鳳凰轉錄儀 v1.1 - 模擬作戰</h1>
-    <p>這是一個輕量化的測試骨架，用於驗證端對端的應用流程。</p>
-
-    <div id="drop-zone">
-        <p>將檔案拖放到此處，或點擊選擇檔案</p>
-        <input type="file" id="file-input" multiple>
-    </div>
-
-    <h2>即時狀態回報</h2>
-    <div id="status-container">
-        <div id="ws-status">WebSocket: 未連線</div>
+    <div class="container">
+        <h1>鳳凰錄音轉寫服務</h1>
+        <div id="drop-zone">
+            <p>將音檔拖曳至此，或點擊按鈕選擇檔案</p>
+            <button class="button" onclick="document.getElementById('file-input').click()">選擇檔案</button>
+            <input type="file" id="file-input" accept="audio/*">
+        </div>
+        <div id="status">等待上傳...</div>
+        <div id="progress-bar-container">
+            <div id="progress-bar">0%</div>
+        </div>
+        <div id="result" style="display: none;"></div>
     </div>
 
     <script>
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
-        const statusContainer = document.getElementById('status-container');
-        const wsStatus = document.getElementById('ws-status');
+        const statusDiv = document.getElementById('status');
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
+        const resultDiv = document.getElementById('result');
+
         let socket;
 
         function connectWebSocket() {
-            const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            socket = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${clientId}`);
+            socket = new WebSocket(`ws://${window.location.host}/ws`);
 
             socket.onopen = () => {
-                console.log('WebSocket 已連線');
-                wsStatus.textContent = 'WebSocket: 已連線';
-                wsStatus.style.color = '#4CAF50';
+                console.log("WebSocket 連線已建立。");
+                statusDiv.textContent = "連線成功，請上傳檔案。";
             };
 
             socket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                console.log('收到訊息:', data);
-                displayStatus(data);
+                console.log("收到訊息:", data);
+
+                if (data.type === 'progress') {
+                    progressBarContainer.style.display = 'block';
+                    const percentage = Math.round(data.progress * 100);
+                    progressBar.style.width = percentage + '%';
+                    progressBar.textContent = percentage + '%';
+                    statusDiv.textContent = `轉寫中... (${data.message})`;
+                } else if (data.type === 'result') {
+                    statusDiv.textContent = "轉寫完成！";
+                    progressBar.style.width = '100%';
+                    progressBar.textContent = '100%';
+                    resultDiv.textContent = data.transcript;
+                    resultDiv.style.display = 'block';
+                    socket.close();
+                } else if (data.type === 'error') {
+                    statusDiv.textContent = `發生錯誤: ${data.message}`;
+                    progressBarContainer.style.display = 'none';
+                }
             };
 
             socket.onclose = () => {
-                console.log('WebSocket 已斷線，嘗試重新連線...');
-                wsStatus.textContent = 'WebSocket: 已斷線，3秒後重試...';
-                wsStatus.style.color = '#f44336';
-                setTimeout(connectWebSocket, 3000);
+                console.log("WebSocket 連線已關閉。");
+                // 可以在此處嘗試重新連線
             };
 
             socket.onerror = (error) => {
-                console.error('WebSocket 錯誤:', error);
-                wsStatus.textContent = 'WebSocket: 發生錯誤';
-                wsStatus.style.color = '#f44336';
+                console.error("WebSocket 錯誤:", error);
+                statusDiv.textContent = "WebSocket 連線錯誤。";
             };
-        }
-
-        function displayStatus(data) {
-            const item = document.createElement('div');
-            item.classList.add('status-item', data.type);
-
-            let content = `<strong>任務 ${data.job_id.substring(0, 8)}:</strong> `;
-            if (data.type === 'progress') {
-                content += data.message;
-            } else if (data.type === 'result') {
-                content += `轉錄完成。\n${data.transcript}`;
-            } else if (data.type === 'error') {
-                content += `發生錯誤: ${data.message}`;
-            } else {
-                 content += `未知訊息類型: ${JSON.stringify(data)}`;
-            }
-
-            item.textContent = content;
-            statusContainer.insertBefore(item, wsStatus);
         }
 
         function uploadFile(file) {
             const formData = new FormData();
             formData.append('file', file);
+
+            statusDiv.textContent = '檔案上傳中...';
+            progressBarContainer.style.display = 'none';
+            resultDiv.style.display = 'none';
+            resultDiv.textContent = '';
+
 
             fetch('/upload', {
                 method: 'POST',
@@ -100,46 +101,45 @@
             })
             .then(response => response.json())
             .then(data => {
-                console.log('上傳成功:', data);
-                displayStatus({
-                    job_id: data.job_id,
-                    type: 'progress',
-                    message: `✅ ${file.name} 已成功上傳，等待處理...`
-                });
+                if (data.status === 'processing') {
+                    statusDiv.textContent = '檔案已接收，等待轉寫...';
+                    connectWebSocket(); // 在確認檔案開始處理後才連線
+                } else {
+                    statusDiv.textContent = `上傳失敗: ${data.detail}`;
+                }
             })
             .catch(error => {
-                console.error('上傳失敗:', error);
-                displayStatus({
-                    job_id: 'N/A',
-                    type: 'error',
-                    message: `❌ ${file.name} 上傳失敗。`
-                });
+                console.error('上傳錯誤:', error);
+                statusDiv.textContent = '上傳失敗，請檢查後端服務是否運行。';
             });
         }
-
-        // --- Event Listeners ---
-        dropZone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', () => {
-            [...fileInput.files].forEach(uploadFile);
-        });
 
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropZone.classList.add('dragover');
         });
 
-        dropZone.addEventListener('dragleave', () => {
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
             dropZone.classList.remove('dragover');
         });
 
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('dragover');
-            [...e.dataTransfer.files].forEach(uploadFile);
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                uploadFile(files[0]);
+            }
         });
 
-        // --- Initial connection ---
-        connectWebSocket();
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                uploadFile(fileInput.files[0]);
+            }
+        });
+
     </script>
 </body>
 </html>
