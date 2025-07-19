@@ -1,45 +1,90 @@
 import time
 import uvicorn
 import logging
+import argparse
 import multiprocessing as mp
+import sys
+import os
+
+# 將專案根目錄添加到 Python 路徑中
+# 這確保了無論從哪裡執行此腳本，`src` 模組都能被正確找到
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from src.main import app
-from src.mock_worker import worker_process
+from src.config import get_config
+from src.transcriber_worker import transcribe_worker
 
 # --- 日誌設定 ---
-# 為啟動器設定專屬的日誌格式
 log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 logging.basicConfig(level=logging.INFO, format=log_format)
 logger = logging.getLogger("智慧啟動器")
 
 # --- 函式定義 ---
-def start_api_server(task_queue: mp.Queue, result_queue: mp.Queue):
+def start_api_server(task_queue: mp.Queue, result_queue: mp.Queue, config):
     """
     啟動 FastAPI (Uvicorn) 伺服器。
-    此函式將在一個獨立的行程中執行。
     """
     logger.info("準備啟動 API 伺服器...")
-    # 在行程啟動後，將佇列傳遞給 FastAPI 應用實例
-    # 這是實現跨行程通訊的關鍵步驟
     from src import main
     main.task_queue = task_queue
     main.result_queue = result_queue
 
-    logger.info("API 伺服器即將在 http://127.0.0.1:8000 上運行")
-    # uvicorn.run() 是一個阻塞操作，它會在此處持續運行
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    logger.info(f"API 伺服器即將在 http://{config.WEBSOCKET_HOST}:{config.WEBSOCKET_PORT} 上運行")
+    uvicorn.run(app, host=config.WEBSOCKET_HOST, port=config.WEBSOCKET_PORT, log_level="info")
     logger.info("API 伺服器已關閉。")
 
+def start_worker(task_queue: mp.Queue, result_queue: mp.Queue, config):
+    """
+    啟動轉錄工人。
+    這個函數會持續從任務隊列中獲取任務並處理。
+    """
+    logger.info(f"轉錄工人已啟動，使用模型: {config.MODEL_SIZE}, Beam Size: {config.BEAM_SIZE}")
 
-def main():
+    while True:
+        try:
+            # 從隊列中獲取任務，這是一個阻塞操作
+            job = task_queue.get()
+
+            # "毒丸" 協議：收到 None 時，工人進程結束
+            if job is None:
+                logger.info("收到結束信號，工人進程即將關閉。")
+                break
+
+            job_id = job.get("job_id")
+            audio_path = job.get("audio_path")
+
+            logger.info(f"工人收到新任務: Job ID {job_id}, 音檔: {audio_path}")
+
+            # 呼叫真實的轉錄工人函數
+            transcribe_worker(
+                queue=result_queue,
+                job_id=job_id,
+                audio_path=audio_path,
+                model_size=config.MODEL_SIZE,
+                beam_size=config.BEAM_SIZE,
+                language=config.LANGUAGE
+            )
+
+        except Exception as e:
+            logger.error(f"工人在處理任務時發生錯誤: {e}", exc_info=True)
+
+def main(args):
     """
     主函式，負責建立佇列、啟動並管理所有子行程。
     """
-    logger.info("--- 鳳凰錄音轉寫服務 ---")
+    # --- 讀取設定 ---
+    try:
+        config = get_config(args.profile)
+        logger.info(f"--- 鳳凰錄音轉寫服務 ---")
+        logger.info(f"成功載入配置: {config.PROFILE_NAME}")
+    except ValueError as e:
+        logger.error(f"設定檔錯誤: {e}")
+        return
+
     logger.info("核心作戰準則：擁抱韌性設計、建立可觀測性。")
 
     try:
         # --- 建立跨行程通訊佇列 ---
-        # 必須使用 multiprocessing.Queue 而非 queue.Queue
         task_queue = mp.Queue()
         result_queue = mp.Queue()
         logger.info("已成功建立任務佇列與結果佇列。")
@@ -48,35 +93,30 @@ def main():
         # 1. API 伺服器行程
         api_process = mp.Process(
             target=start_api_server,
-            args=(task_queue, result_queue),
-            name="APIServerProcess" # 給行程一個有意義的名字
+            args=(task_queue, result_queue, config),
+            name="APIServerProcess"
         )
 
-        # 2. 模擬工人行程
+        # 2. 智慧工人行程
         worker_process_instance = mp.Process(
-            target=worker_process,
-            args=(task_queue, result_queue),
-            name="MockWorkerProcess"
+            target=start_worker,
+            args=(task_queue, result_queue, config),
+            name="IntelligentWorkerProcess"
         )
 
-        # 將行程設定為守護行程 (daemon)
-        # 這意味著當主行程結束時，這些子行程會被自動終止
-        # 這簡化了關閉流程，但也意味著它們可能在工作中被粗暴中斷
         api_process.daemon = True
         worker_process_instance.daemon = True
 
         logger.info("正在啟動 API 伺服器行程...")
         api_process.start()
 
-        logger.info("正在啟動模擬工人行程...")
+        logger.info("正在啟動智慧工人行程...")
         worker_process_instance.start()
 
         logger.info("所有核心服務已啟動。主行程將保持運行以監控子行程。")
         logger.info("按 Ctrl+C 以終止所有服務。")
 
         # --- 主行程迴圈 ---
-        # 主行程需要保持運行，否則守護行程會立即退出
-        # 我們可以透過監控子行程的存活狀態來實現優雅的關閉
         while True:
             time.sleep(1)
             if not api_process.is_alive():
@@ -92,29 +132,41 @@ def main():
         logger.error(f"啟動器發生未預期的嚴重錯誤: {e}", exc_info=True)
     finally:
         logger.info("開始執行關閉程序...")
-        # 雖然守護行程會自動終止，但明確的 terminate/join 是更好的實踐
-        # 這裡我們依賴守護特性進行簡化
-        if 'api_process' in locals() and api_process.is_alive():
-            api_process.terminate() # 強制終止
-            api_process.join(timeout=5) # 等待行程結束
-            logger.info("API 伺服器行程已終止。")
 
         if 'worker_process_instance' in locals() and worker_process_instance.is_alive():
-            # 對於工人，可以先發送一個 "毒丸" 來嘗試優雅關閉
             try:
+                # 發送 "毒丸" 讓工人優雅地完成當前任務後退出
                 task_queue.put(None, timeout=1)
+                logger.info("已發送關閉信號至工人行程。")
             except Exception:
-                pass # 忽略佇列已滿或已關閉的錯誤
-            worker_process_instance.terminate()
-            worker_process_instance.join(timeout=5)
-            logger.info("模擬工人行程已終止。")
+                logger.warning("發送關閉信號至工人失敗，可能將強制終止。")
+
+            worker_process_instance.join(timeout=10) # 給工人一些時間來結束
+            if worker_process_instance.is_alive():
+                worker_process_instance.terminate()
+                worker_process_instance.join(timeout=5)
+            logger.info("智慧工人行程已終止。")
+
+        if 'api_process' in locals() and api_process.is_alive():
+            api_process.terminate()
+            api_process.join(timeout=5)
+            logger.info("API 伺服器行程已終止。")
 
         logger.info("所有服務已關閉。再會。")
 
 
 if __name__ == "__main__":
-    # 設定 multiprocessing 的啟動方法為 'fork' (對 Linux/macOS 友好)
-    # 或 'spawn' (對 Windows/macOS 友好且更安全)
-    # 'spawn' 是更推薦的跨平台選擇，它會建立一個全新的 Python 直譯器行程
+    # --- 命令列參數解析 ---
+    parser = argparse.ArgumentParser(description="鳳凰轉錄儀 - 智慧啟動器")
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default="testing",
+        choices=["testing", "production"],
+        help="選擇要使用的作戰配置 (預設: testing)"
+    )
+    args = parser.parse_args()
+
+    # --- 設定 multiprocessing 啟動方法 ---
     mp.set_start_method("spawn", force=True)
-    main()
+    main(args)

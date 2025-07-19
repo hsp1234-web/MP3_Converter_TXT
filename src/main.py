@@ -86,26 +86,34 @@ async def read_root():
     return "<h1>歡迎來到鳳凰轉寫服務 API</h1>"
 
 
+import uuid
+
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     """
-    處理檔案上傳，將任務加入佇列。
+    處理檔案上傳，產生一個唯一的任務 ID，並將任務加入佇列。
     """
     try:
-        filepath = UPLOAD_DIR / file.filename
+        job_id = str(uuid.uuid4())
+        filepath = UPLOAD_DIR / f"{job_id}_{file.filename}"
+
         # 使用 aiofiles 進行非同步檔案寫入
         async with aiofiles.open(filepath, 'wb') as out_file:
             content = await file.read()
             await out_file.write(content)
 
-        logging.info(f"檔案 '{file.filename}' 已成功上傳至 '{filepath}'")
+        logging.info(f"檔案 '{file.filename}' 已成功上傳至 '{filepath}'，任務 ID: {job_id}")
 
         # 檢查任務佇列是否可用
         if task_queue:
-            # 將任務（檔案路徑）放入佇列
-            task_queue.put({"filepath": str(filepath)})
-            logging.info(f"已將轉寫任務加入佇列: {filepath}")
-            return JSONResponse(content={"status": "processing", "filename": file.filename})
+            # 建立符合工人期望的任務字典
+            task = {
+                "job_id": job_id,
+                "audio_path": str(filepath)
+            }
+            task_queue.put(task)
+            logging.info(f"已將轉寫任務加入佇列: {task}")
+            return JSONResponse(content={"status": "processing", "filename": file.filename, "job_id": job_id})
         else:
             logging.error("任務佇列 (task_queue) 未被初始化！無法新增任務。")
             return JSONResponse(content={"status": "error", "detail": "後端服務尚未準備就緒"}, status_code=503)
