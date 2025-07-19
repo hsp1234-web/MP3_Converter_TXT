@@ -56,16 +56,17 @@ def process_single_task(db_connection):
             db_connection.commit()
             logger.info(f"任務 {task_id} 狀態更新為: failed")
 
-def main_loop():
+def transcriber_worker_process(log_queue, task_queue, result_queue, config):
     """
-    工人的主循環。
+    工人的主循環，現在作為一個獨立的行程函數。
     """
-    logger = get_logger("轉錄工人")
-    logger.info("工人主循環已啟動")
+    logger = get_logger("轉錄工人", log_queue)
+    logger.info("真實轉錄工人行程已啟動")
     db_connection = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
 
     while True:
         try:
+            # 這裡的邏輯是輪詢數據庫，未來可以改為從 task_queue 獲取任務
             process_single_task(db_connection)
             time.sleep(5)  # 每5秒檢查一次新任務
         except Exception as e:
@@ -73,4 +74,11 @@ def main_loop():
             time.sleep(10) # 如果發生錯誤，等待更長時間
 
 if __name__ == "__main__":
-    main_loop()
+    # 這部分保留用於獨立測試
+    # 為了直接運行，需要一個模擬的佇列
+    class MockQueue:
+        def put(self, *args, **kwargs):
+            print(f"MOCK_QUEUE: {args}")
+
+    print("以獨立模式運行轉錄工人...")
+    transcriber_worker_process(MockQueue(), None, None, None)

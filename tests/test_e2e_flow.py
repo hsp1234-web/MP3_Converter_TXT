@@ -5,18 +5,18 @@ import time
 import os
 
 # --- Constants ---
-BASE_URL = "http://127.0.0.1:8765"
 POLL_INTERVAL = 0.5
 TEST_TIMEOUT = 60
 
 @pytest.mark.asyncio
-async def test_full_transcription_flow(live_server):
+async def test_full_transcription_flow(live_api_server):
     """
-    A full end-to-end test case that uses the live_server fixture.
+    A full end-to-end test case that uses the live_api_server fixture.
     1. Uploads a file and gets a task_id.
     2. Polls the status endpoint until the task is completed or fails.
     3. Validates the final result.
     """
+    base_url = live_api_server  # Use the URL from the fixture
     start_time = time.time()
 
     # --- Step 1: Upload a mock audio file ---
@@ -30,8 +30,8 @@ async def test_full_transcription_flow(live_server):
             with open(mock_audio_path, "rb") as f:
                 files = {'file': (os.path.basename(mock_audio_path), f, 'audio/wav')}
 
-                print(f"\nStep 1: Uploading audio file to {BASE_URL}/upload ...")
-                response = await client.post(f"{BASE_URL}/upload", files=files)
+                print(f"\nStep 1: Uploading audio file to {base_url}/upload ...")
+                response = await client.post(f"{base_url}/upload", files=files)
 
             response.raise_for_status() # Will raise an exception for 4xx/5xx responses
             assert response.status_code == 202
@@ -46,7 +46,7 @@ async def test_full_transcription_flow(live_server):
         final_status = None
         while time.time() - start_time < TEST_TIMEOUT:
             async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.get(f"{BASE_URL}/status/{task_id}")
+                response = await client.get(f"{base_url}/status/{task_id}")
 
             response.raise_for_status()
             status_data = response.json()

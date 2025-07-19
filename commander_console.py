@@ -1,58 +1,64 @@
+import click
+import os
+import sys
+import subprocess
+
+# --- 確保 src 目錄在 Python 路徑中 ---
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+# --- 主命令群組 ---
+@click.group()
+def cli():
+    """
+    鳳凰錄音轉寫服務 - 統一指揮控制台。
+    這是專案所有後台任務、數據處理和服務啟動的唯一入口。
+    """
+    pass
+
+# --- 整合 launcher.py 的邏輯 ---
 import time
 import uvicorn
-import argparse
 import multiprocessing as mp
-import sys
-import os
 
-# 將專案根目錄添加到 Python 路徑中
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+# 由於我們已經將 src 加入 sys.path，可以直接從 src 導入
 from src.main import app
 from src.config import get_config
 from src.transcriber_worker import transcriber_worker_process
 from src.mock_worker import mock_worker_process
 from src.logger import get_logger, log_writer_process
 
-# --- 函式定義 ---
 def start_api_server(log_queue: mp.Queue, task_queue: mp.Queue, result_queue: mp.Queue, config):
     """
     啟動 FastAPI (Uvicorn) 伺服器。
     此函數在一個獨立的子行程中執行。
     """
-    # 在子行程中，使用傳入的佇列來設定 logger
     logger = get_logger("API伺服器", log_queue)
     logger.info("準備啟動 API 伺服器...")
 
     from src import main
-    # 將佇列傳遞給 FastAPI 應用模組
     main.log_queue = log_queue
     main.task_queue = task_queue
     main.result_queue = result_queue
 
     logger.info(f"API 伺服器即將在 http://{config.WEBSOCKET_HOST}:{config.WEBSOCKET_PORT} 上運行")
-    # 設定 uvicorn 的日誌，使其也使用我們的佇列
     uvicorn.run(
         app,
         host=config.WEBSOCKET_HOST,
         port=config.WEBSOCKET_PORT,
-        log_config=None # 禁用 uvicorn 預設日誌設定
+        log_config=None
     )
-    logger.info("API 伺服器已成功啟動。")
     logger.info("API 伺服器已關閉。")
 
 
-def main(args):
+def launcher_main(profile: str):
     """
-    主函式，負責建立佇列、啟動並管理所有子行程。
+    這是從 src/launcher.py 移植過來的主函式，負責啟動並管理所有子行程。
     """
-    # --- 建立日誌佇列與主行程日誌記錄器 ---
     log_queue = mp.Queue()
     logger = get_logger("智慧啟動器", log_queue)
 
-    # --- 讀取設定 ---
     try:
-        config = get_config(args.profile)
+        config = get_config(profile)
         logger.info("--- 鳳凰錄音轉寫服務 ---")
         logger.info(f"成功載入配置: {config.PROFILE_NAME}")
     except ValueError as e:
@@ -61,20 +67,15 @@ def main(args):
 
     logger.info("核心作戰準則：擁抱韌性設計、建立可觀測性。")
 
-    # --- 建立子行程列表與關閉事件 ---
     processes = []
     try:
-        # --- 建立跨行程通訊佇列 ---
         task_queue = mp.Queue()
         result_queue = mp.Queue()
         logger.info("已成功建立任務佇列、結果佇列與日誌佇列。")
 
-        # --- 建立並啟動子行程 ---
-        # 1. 日誌書記官行程
         log_writer = mp.Process(target=log_writer_process, args=(log_queue,), name="LogWriterProcess")
         processes.append(log_writer)
 
-        # 2. API 伺服器行程
         api_process = mp.Process(
             target=start_api_server,
             args=(log_queue, task_queue, result_queue, config),
@@ -82,8 +83,7 @@ def main(args):
         )
         processes.append(api_process)
 
-        # 3. 智慧工人行程 (根據環境選擇)
-        if args.profile == "testing":
+        if profile == "testing":
             logger.info("偵測到 'testing' 環境，將啟動模擬工人。")
             worker_target = mock_worker_process
             worker_name = "MockWorkerProcess"
@@ -99,7 +99,6 @@ def main(args):
         )
         processes.append(worker_process_instance)
 
-        # --- 啟動所有行程 ---
         for p in processes:
             p.daemon = True
             logger.info(f"正在啟動 {p.name} 行程...")
@@ -108,18 +107,12 @@ def main(args):
         logger.info("所有核心服務已啟動。主行程將保持運行以監控子行程。")
         logger.info("按 Ctrl+C 以終止所有服務。")
 
-        # --- 主行程迴圈 ---
-        # 在測試模式下，我們希望應用程式在啟動後保持運行，即使沒有工作。
-        if args.profile == "testing":
-            while True:
-                time.sleep(1)
-        else:
-            while True:
-                time.sleep(1)
-                for p in processes:
-                    if not p.is_alive():
-                        logger.warning(f"行程 {p.name} (PID: {p.pid}) 已意外終止！")
-                        raise RuntimeError(f"{p.name} 已終止")
+        while True:
+            time.sleep(1)
+            for p in processes:
+                if not p.is_alive():
+                    logger.warning(f"行程 {p.name} (PID: {p.pid}) 已意外終止！")
+                    raise RuntimeError(f"{p.name} 已終止")
 
     except (KeyboardInterrupt, RuntimeError) as e:
         if isinstance(e, KeyboardInterrupt):
@@ -129,53 +122,86 @@ def main(args):
 
     finally:
         logger.info("開始執行關閉程序...")
-
-        # --- 優雅地終止工人行程 ---
         if 'worker_process_instance' in locals() and worker_process_instance.is_alive():
             try:
                 logger.info("正在發送關閉信號至工人行程...")
-                task_queue.put(None, timeout=1) # 發送 "毒丸"
+                task_queue.put(None, timeout=1)
             except Exception as e:
                 logger.warning(f"發送關閉信號至工人失敗: {e}，可能將強制終止。")
 
-        # --- 終止所有行程 ---
         for p in reversed(processes):
-            if p.name == "LogWriterProcess":
-                continue # 日誌行程最後關閉
+            if p.name == "LogWriterProcess": continue
             if p.is_alive():
                 logger.info(f"正在終止 {p.name}...")
                 p.terminate()
 
-        # 等待行程結束
         for p in reversed(processes):
-            if p.name == "LogWriterProcess":
-                continue
+            if p.name == "LogWriterProcess": continue
             p.join(timeout=5)
-            if p.is_alive():
-                logger.warning(f"{p.name} 未能在5秒內結束，將被強制終止。")
-                # p.kill() # 在 terminate 無效時的最後手段
 
-        # --- 最後，關閉日誌書記官 ---
         if 'log_writer' in locals() and log_writer.is_alive():
             logger.info("正在關閉日誌書記官行程...")
-            log_queue.put(None) # 發送 "毒丸"
+            log_queue.put(None)
             log_writer.join(timeout=2)
 
         logger.info("所有服務已關閉。再會。")
 
 
-if __name__ == "__main__":
-    # --- 命令列參數解析 ---
-    parser = argparse.ArgumentParser(description="鳳凰轉錄儀 - 智慧啟動器")
-    parser.add_argument(
-        "--profile",
-        type=str,
-        default="testing",
-        choices=["testing", "production"],
-        help="選擇要使用的作戰配置 (預設: testing)"
-    )
-    args = parser.parse_args()
+@cli.command(name="run-server")
+@click.option(
+    "--profile",
+    type=click.Choice(["testing", "production"], case_sensitive=False),
+    default="testing",
+    help="選擇要使用的作戰配置 (預設: testing)"
+)
+def run_server(profile):
+    """
+    啟動 API 伺服器以及對應的背景工人行程。
+    """
+    click.echo(f"==> 準備以 '{profile}' 配置啟動服務...")
+    # 設定 multiprocessing 啟動方法
+    # 在某些系統上，需要 force=True
+    if sys.platform == "darwin":
+         mp.set_start_method("spawn", force=True)
+    else:
+         mp.set_start_method("spawn")
 
-    # --- 設定 multiprocessing 啟動方法 ---
-    mp.set_start_method("spawn", force=True)
-    main(args)
+    launcher_main(profile)
+
+
+@cli.command(name="install-deps")
+def install_deps():
+    """
+    安裝或更新專案所需的所有 Python 依賴套件。
+    """
+    click.echo("==> 正在安裝/更新依賴套件 (來自 requirements.txt)...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+        click.secho("==> 依賴套件安裝成功。", fg="green")
+    except subprocess.CalledProcessError as e:
+        click.secho(f"==> 依賴套件安裝失敗: {e}", fg="red")
+        sys.exit(1)
+    except FileNotFoundError:
+        click.secho("==> 錯誤: 'pip' 未找到。請確保 Python 與 pip 已被正確安裝。", fg="red")
+        sys.exit(1)
+
+
+@cli.command(name="run-tests")
+def run_tests():
+    """
+    執行專案的自動化測試套件 (使用 pytest)。
+    """
+    click.echo("==> 正在執行自動化測試...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pytest"])
+        click.secho("==> 所有測試皆已通過。", fg="green")
+    except subprocess.CalledProcessError as e:
+        click.secho(f"==> 測試失敗: {e}", fg="red")
+        sys.exit(1)
+    except FileNotFoundError:
+        click.secho("==> 錯誤: 'pytest' 未找到。請先執行 'install-deps'。", fg="red")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    cli()

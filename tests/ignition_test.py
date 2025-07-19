@@ -2,7 +2,6 @@ import pytest
 
 def test_import_all():
     try:
-        from src import launcher
         from src import main
         from src import config
         from src import logger
