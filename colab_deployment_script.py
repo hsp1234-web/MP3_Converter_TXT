@@ -1,17 +1,20 @@
-#@title 鳳凰轉錄儀 v4.2 - Colab 一鍵部署指揮中心 (可直接執行)
+#@title 鳳凰轉錄儀 v4.3 - Colab 一鍵部署指揮中心 (部署修正版)
 #@markdown ---
 #@markdown ### **1. 核心作戰參數**
-#@markdown > **設定後端程式碼來源與 AI 模型。**
+#@markdown > **設定後端程式碼來源、分支與日誌偏好。**
 #@markdown ---
 #@markdown **後端程式碼倉庫 (REPOSITORY_URL)**
 #@markdown > **請填寫您的 Git 倉庫網址。**
 REPOSITORY_URL = "https://github.com/hsp1234-web/MP3_Converter_TXT" #@param {type:"string"}
 #@markdown **後端版本分支 (TARGET_BRANCH)**
-#@markdown > **指定要部署的分支。**
-TARGET_BRANCH = "V2.0.1" #@param {type:"string"}
+#@markdown > **指定要部署的作戰分支。**
+TARGET_BRANCH = "fix-colab-deployment" #@param {type:"string"}
 #@markdown **AI 轉錄模型大小 (MODEL_SIZE)**
 #@markdown > **模型越大，效果越好，但載入和處理速度越慢。建議從 `base` 開始。**
 MODEL_SIZE = "base" #@param ["tiny", "base", "small", "medium", "large-v3"]
+#@markdown **日誌顯示行數上限 (LOG_DISPLAY_MAX_LINES)**
+#@markdown > **設定日誌顯示偏好。Colab 介面會自動處理滾動，此設定主要為未來擴充保留。**
+LOG_DISPLAY_MAX_LINES = 500 #@param {type:"integer"}
 #@markdown **強制刷新後端程式碼 (FORCE_REPO_REFRESH)**
 #@markdown > **勾選此項會刪除舊的程式碼，重新從 GitHub 拉取。**
 FORCE_REPO_REFRESH = True #@param {type:"boolean"}
@@ -32,6 +35,7 @@ import shutil
 import re
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+from collections import deque
 
 # Colab 專用模組
 from google.colab import output as colab_output
@@ -86,11 +90,13 @@ class LogTailer(threading.Thread):
 def log_message(message):
     """將帶有時間戳的訊息寫入日誌檔案。"""
     try:
+        # 確保日誌目錄存在，但這不應該是專案的主目錄
         LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(LOG_FILE_PATH, 'a', encoding='utf-8') as f:
             timestamp = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"[{timestamp}] [Colab 指揮中心] {message}\n")
     except Exception as e:
+        # 直接打印到控制台，因為日誌系統本身可能已失敗
         print(f"[Log System CRITICAL Error] 無法寫入日誌: {e}")
 
 def run_shell_command(cmd, cwd=".", title=""):
@@ -163,6 +169,7 @@ def archive_log_file():
         return
     try:
         LOG_ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+        # 歸檔時總是保存完整日誌，以供未來分析
         log_content = LOG_FILE_PATH.read_text(encoding='utf-8')
         timestamp = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d_%H-%M-%S")
         archive_filename = f"作戰日誌_{timestamp}.log"
@@ -178,30 +185,48 @@ def archive_log_file():
 # ==============================================================================
 try:
     clear_output(wait=True)
-    print("🔥 鳳凰轉錄儀 v4.2 - 單體化作戰部署 🔥")
+    print("🔥 鳳凰轉錄儀 v4.3 - 部署修正版 🔥")
     print("="*80)
 
+    # --- 步驟 0: 清理舊環境 ---
     stop_all_services()
     STOP_EVENT.clear()
-    if LOG_FILE_PATH.exists(): LOG_FILE_PATH.unlink()
 
+    # --- 步驟 1: 準備原始碼 (已修復的核心邏輯) ---
+    should_clone = False
+    if not PROJECT_PATH.exists():
+        should_clone = True
+        print(f"專案目錄 {PROJECT_PATH} 不存在，準備執行 clone。")
+    elif FORCE_REPO_REFRESH:
+        should_clone = True
+        print(f"偵測到強制刷新選項，正在刪除舊專案目錄: {PROJECT_PATH}")
+        shutil.rmtree(PROJECT_PATH)
+        print("舊專案目錄已移除。")
+    else:
+        print("✅ 專案目錄已存在且未強制刷新，跳過下載。")
+
+    # 只有在需要時才執行 clone，並在此之後才初始化日誌系統
+    if should_clone:
+        # 暫時直接打印，因為日誌檔案還不存在
+        print(f"🚀 開始執行: 從 GitHub 拉取後端程式碼 (分支: {TARGET_BRANCH})...")
+        clone_process = subprocess.run(
+            ["git", "clone", "--branch", TARGET_BRANCH, REPOSITORY_URL, str(PROJECT_PATH)],
+            capture_output=True, text=True
+        )
+        if clone_process.returncode != 0:
+            print("💥 Git Clone 失敗! 錯誤訊息:")
+            print(clone_process.stderr)
+            raise RuntimeError("無法從 GitHub 下載專案，請檢查 URL 和分支名稱。")
+        print("✅ 成功完成: 從 GitHub 拉取後端程式碼")
+
+    # --- 步驟 2: 初始化日誌系統 ---
+    # 現在專案目錄已確定存在，可以安全地初始化日誌
+    if LOG_FILE_PATH.exists(): LOG_FILE_PATH.unlink()
     LOG_TAILER_THREAD = LogTailer(LOG_FILE_PATH, STOP_EVENT)
     LOG_TAILER_THREAD.start()
     log_message("日誌監控系統已啟動。")
 
-    if FORCE_REPO_REFRESH and PROJECT_PATH.exists():
-        log_message(f"偵測到強制刷新選項，正在刪除舊專案目錄: {PROJECT_PATH}")
-        shutil.rmtree(PROJECT_PATH)
-        log_message("舊專案目錄已移除。")
-
-    if not PROJECT_PATH.exists():
-        run_shell_command(
-            ["git", "clone", "--branch", TARGET_BRANCH, REPOSITORY_URL, str(PROJECT_PATH)],
-            title="從 GitHub 拉取後端程式碼"
-        )
-    else:
-        log_message("✅ 專案目錄已存在，跳過下載。")
-
+    # --- 步驟 3: 設定 AI 模型 ---
     config_path = PROJECT_PATH / "src" / "core" / "config.py"
     if config_path.exists():
         log_message(f"正在設定 AI 模型大小為: {MODEL_SIZE}")
@@ -212,6 +237,7 @@ try:
     else:
         log_message(f"⚠️ 警告: 未在 {config_path} 找到設定檔，將使用專案預設模型。")
 
+    # --- 步驟 4: 安裝依賴 ---
     # 修正：在執行依賴安裝前，先安裝 uv
     run_shell_command(
         [sys.executable, "-m", "pip", "install", "uv"],
@@ -224,6 +250,7 @@ try:
         title="使用 commander_console 安裝所有作戰依賴"
     )
 
+    # --- 步驟 5: 啟動伺服器 ---
     start_server()
 
     # 增加等待時間以確保服務完全啟動
@@ -231,6 +258,7 @@ try:
     if SERVER_PROCESS.poll() is not None:
         raise RuntimeError("伺服器未能成功啟動或在啟動過程中崩潰，請檢查上方日誌以了解詳細原因。")
 
+    # --- 步驟 6: 生成公開網址並顯示 ---
     log_message("正在生成 Colab 公開代理網址...")
     proxy_url = colab_output.eval_js(f'google.colab.kernel.proxyPort({PORT})')
     log_message(f"✅ 公開網址已生成: {proxy_url}")
