@@ -1,5 +1,5 @@
 [project]
-name = "app"
+name = "src"
 version = "0.1.0"
 description = ""
 authors = [
@@ -37,7 +37,8 @@ dependencies = [
     "h11",
     "pytest-timeout",
     "httpcore",
-    "certifi"
+    "certifi",
+    "pytest-xprocess"
 ]
 
 [project.optional-dependencies]
