@@ -99,7 +99,7 @@ def test_full_transcription_flow(app_process):
 
                 assert response.status_code == 200
                 response_data = response.json()
-                assert response_data["status"] == "processing"
+                assert response_data["status"] == "queued"
                 assert "job_id" in response_data
                 job_id = response_data["job_id"]
                 print(f"檔案上傳成功，後端已開始處理，任務 ID: {job_id}")

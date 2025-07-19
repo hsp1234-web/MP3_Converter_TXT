@@ -10,8 +10,8 @@ Jules 應根據任務需求，在此處調整或新增配置。
 class BaseConfig:
     """基礎設定，所有配置都應繼承自此類別。"""
     # WebSocket 伺服器設定
-    WEBSOCKET_HOST = "localhost"
-    WEBSOCKET_PORT = 8765
+    WEBSOCKET_HOST = "127.0.0.1"
+    WEBSOCKET_PORT = 8000
 
     # 預設模型設定
     MODEL_SIZE = "tiny"

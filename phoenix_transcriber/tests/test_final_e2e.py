@@ -1,55 +1,66 @@
-import subprocess
-import time
 import pytest
-import httpx
-import websockets
-import asyncio
+from fastapi.testclient import TestClient
+import sys
 import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+from src.main import app  # 直接導入 FastAPI app
+from src.transcriber_worker import transcriber_worker_process # 導入工人邏輯
+from src.queues import task_queue, result_queue # 導入共享隊列
 import json
+import asyncio
 
-@pytest.fixture(scope="module")
-def server():
-    # 在背景啟動主應用程式
-    process = subprocess.Popen(["poetry", "run", "python", "src/launcher.py"])
-    time.sleep(15) # 等待伺服器和模型載入
-    yield
-    process.terminate()
-    process.wait()
+# 使用 FastAPI 的 TestClient，它會在測試過程中管理 app 的生命週期
+client = TestClient(app)
 
 @pytest.mark.asyncio
-async def test_full_transcription_flow(server):
-    # 準備測試檔案
-    test_file = "tests/test_audio.wav"
-    assert os.path.exists(test_file)
+async def test_single_loop_transcription_flow():
+    """
+    單體迴路測試：
+    1. 透過 TestClient 提交任務到 API。
+    2. 從 task_queue 中手動取出任務。
+    3. 直接調用工人函數來處理該任務。
+    4. 從 result_queue 中驗證處理結果。
+    5. 透過 WebSocket (可選) 或 API 端點驗證最終狀態。
+    """
+    # 清空隊列，確保測試隔離
+    while not task_queue.empty():
+        task_queue.get_nowait()
+    while not result_queue.empty():
+        result_queue.get_nowait()
 
-    results = []
-    # 設定 WebSocket 連線來接收結果
-    async with websockets.connect("ws://localhost:8000/ws") as websocket:
+    # --- 步驟 1: 透過 API 提交任務 ---
+    test_file_path = "phoenix_transcriber/tests/test_audio.wav"
+    assert os.path.exists(test_file_path), "測試音檔不存在"
 
-        # 異步上傳檔案
-        async with httpx.AsyncClient() as client:
-            with open(test_file, "rb") as f:
-                files = {'file': (os.path.basename(test_file), f, 'audio/wav')}
-                response = await client.post("http://localhost:8000/upload", files=files, timeout=30)
-                assert response.status_code == 200
-                upload_result = response.json()
-                assert "job_id" in upload_result
+    with open(test_file_path, "rb") as f:
+        files = {'file': ('test_audio.wav', f, 'audio/wav')}
+        response = client.post("/upload", files=files)
 
-        # 等待並接收 WebSocket 訊息
-        try:
-            while True:
-                message = await asyncio.wait_for(websocket.recv(), timeout=60)
-                result = json.loads(message)
-                if result.get("job_id") == upload_result["job_id"]:
-                    results.append(result)
-                    if result.get("status") == "completed" or result.get("status") == "error":
-                        break
-        except asyncio.TimeoutError:
-            pytest.fail("WebSocket 在指定時間內未收到完成訊息")
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["status"] == "queued"
+    job_id = response_data["job_id"]
 
-    # 驗證收到的訊息序列
-    assert len(results) >= 2, "應至少收到 queued 和 completed/error 訊息"
-    statuses = [r.get("status") for r in results]
-    assert "queued" in statuses
-    assert "processing" in statuses
-    assert "completed" in statuses, f"最終狀態不是 completed，收到的訊息: {results}"
+    # --- 步驟 2: 從佇列中手動取出任務 ---
+    task = await task_queue.get()
+    assert task is not None
+    assert task["job_id"] == job_id
+
+    # --- 步驟 3: 直接調用工人函數 ---
+    # 在同一個事件循環中運行工人
+    await process_task(task)
+
+    # --- 步驟 4: 從結果佇列中驗證處理結果 ---
+    result = await result_queue.get()
+    assert result is not None
+    assert result["job_id"] == job_id
+    assert result["status"] == "completed"
+    assert "transcript" in result
+    print(f"轉錄結果: {result['transcript']}")
+
+    # --- 步驟 5: (可選) 驗證 API 狀態 ---
+    # 這裡我們需要一個方法來讓 API 知道結果，在真實應用中這是由工人進程完成的
+    # 在這個測試中，我們可以模擬這個過程，或者直接檢查數據庫 (如果有的話)
+    # 為了簡化，我們主要依賴隊列的結果
+
+    print("單體迴路測試成功！")

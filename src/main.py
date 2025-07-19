@@ -15,6 +15,10 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # --- FastAPI 應用程式實例 ---
 app = FastAPI()
 
+@app.get("/health", status_code=200)
+async def health_check():
+    return {"status": "ok"}
+
 # --- 全域變數 (由 launcher 賦值) ---
 # 這些變數將在應用程式啟動時由 `launcher.py` 注入。
 log_queue: Queue = None
