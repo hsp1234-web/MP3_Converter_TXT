@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鳳凰轉錄儀</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; color: #d1d5db; }
+        .drop-zone { border-color: #4b5563; }
+        .drop-zone-over { border-color: #3b82f6; background-color: #1f2937; }
+        .status-queued { color: #f59e0b; }
+        .status-processing { color: #3b82f6; }
+        .status-completed { color: #22c55e; }
+        .status-error { color: #ef4444; }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <div class="max-w-4xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-white mb-2">鳳凰轉錄儀</h1>
+            <p class="text-lg text-gray-400">上傳音訊檔，自動轉錄為文字。</p>
+        </header>
+
+        <div id="drop-zone" class="drop-zone border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-all mb-8">
+            <input type="file" id="file-input" class="hidden" multiple>
+            <i data-lucide="upload-cloud" class="mx-auto h-16 w-16 text-gray-500"></i>
+            <p class="mt-4 text-white">拖曳檔案至此，或 <span class="font-semibold text-blue-500">點擊選擇檔案</span></p>
+            <p class="text-xs text-gray-500 mt-1">支援 MP3, WAV, M4A, FLAC 等格式</p>
+        </div>
+
+        <div id="status-bar" class="mb-4 flex items-center justify-center gap-2 text-gray-400">
+            <div id="status-light" class="h-3 w-3 rounded-full bg-red-500 transition-colors"></div>
+            <span id="status-text">正在連線至伺服器...</span>
+        </div>
+
+        <div id="file-list" class="space-y-4">
+            <!-- 檔案項目將會動態新增於此 -->
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            const fileList = document.getElementById('file-list');
+            const statusLight = document.getElementById('status-light');
+            const statusText = document.getElementById('status-text');
+
+            const createFileItemHTML = (jobId, filename) => `
+                <div id="${jobId}" class="bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <i data-lucide="file-audio" class="h-6 w-6 text-gray-500"></i>
+                        <span class="font-medium text-white">${filename}</span>
+                    </div>
+                    <div class="status-indicator flex items-center gap-2 text-sm status-queued">
+                        <i data-lucide="clock" class="h-4 w-4"></i>
+                        <span>等待處理</span>
+                    </div>
+                </div>`;
+
+            const updateFileItemStatus = (jobId, status, message = '') => {
+                const item = document.getElementById(jobId);
+                if (!item) return;
+                const indicator = item.querySelector('.status-indicator');
+                let icon, text, colorClass;
+
+                switch (status) {
+                    case 'processing':
+                        icon = 'loader-2'; text = '轉錄中...'; colorClass = 'status-processing animate-spin'; break;
+                    case 'completed':
+                        icon = 'check-circle'; text = '完成'; colorClass = 'status-completed'; break;
+                    case 'error':
+                        icon = 'x-circle'; text = '錯誤'; colorClass = 'status-error'; break;
+                    default:
+                        icon = 'clock'; text = '等待處理'; colorClass = 'status-queued';
+                }
+                indicator.innerHTML = `<i data-lucide="${icon}" class="h-4 w-4"></i><span>${text}</span>`;
+                indicator.className = `status-indicator flex items-center gap-2 text-sm ${colorClass}`;
+                lucide.createIcons();
+            };
+
+            const connectWebSocket = () => {
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const socket = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+
+                socket.onopen = () => {
+                    statusLight.classList.remove('bg-red-500');
+                    statusLight.classList.add('bg-green-500');
+                    statusText.textContent = '連線成功';
+                };
+
+                socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if(data.status === 'queued') {
+                        const html = createFileItemHTML(data.job_id, data.filename);
+                        fileList.insertAdjacentHTML('afterbegin', html);
+                    } else {
+                        updateFileItemStatus(data.job_id, data.status, data.message);
+                    }
+                    lucide.createIcons();
+                };
+
+                socket.onclose = () => {
+                    statusLight.classList.remove('bg-green-500');
+                    statusLight.classList.add('bg-red-500');
+                    statusText.textContent = '連線中斷，5秒後重連...';
+                    setTimeout(connectWebSocket, 5000);
+                };
+            };
+
+            const uploadFile = async (file) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const response = await fetch('/upload', { method: 'POST', body: formData });
+                    if (!response.ok) throw new Error('上傳失敗');
+                } catch (error) {
+                    console.error('Upload error:', error);
+                }
+            };
+
+            dropZone.onclick = () => fileInput.click();
+            fileInput.onchange = (e) => [...e.target.files].forEach(uploadFile);
+
+            ['dragenter', 'dragover'].forEach(e => dropZone.addEventListener(e, (evt) => {
+                evt.preventDefault();
+                dropZone.classList.add('drop-zone-over');
+            }));
+            ['dragleave', 'drop'].forEach(e => dropZone.addEventListener(e, (evt) => {
+                evt.preventDefault();
+                dropZone.classList.remove('drop-zone-over');
+            }));
+            dropZone.ondrop = (e) => [...e.dataTransfer.files].forEach(uploadFile);
+
+            connectWebSocket();
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
