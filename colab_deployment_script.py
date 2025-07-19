@@ -124,8 +124,9 @@ def run_shell_command(cmd, cwd=".", title=""):
 def start_server():
     """在背景啟動主應用程式伺服器。"""
     global SERVER_PROCESS
-    log_message("準備啟動鳳凰轉錄儀主程式 (launcher.py)...")
-    run_command = [sys.executable, "commander_console.py", "launch"]
+    log_message("準備啟動鳳凰轉錄儀主程式...")
+    # 使用正確的 "run-server" 命令，並傳遞 "production" 配置
+    run_command = [sys.executable, "commander_console.py", "run-server", "--profile", "production"]
     log_file_handle = open(LOG_FILE_PATH, 'a', encoding='utf-8')
     SERVER_PROCESS = subprocess.Popen(
         run_command, cwd=str(PROJECT_PATH),
