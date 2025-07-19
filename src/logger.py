@@ -61,7 +61,8 @@ def log_writer_process(log_queue: mp.Queue):
 
         except Exception:
             # 在日誌系統本身發生錯誤時，印出到標準錯誤流
-            import sys, traceback
+            import sys
+            import traceback
             print("--- 嚴重錯誤：日誌書記官行程發生異常 ---", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
 

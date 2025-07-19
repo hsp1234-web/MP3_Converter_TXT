@@ -11,7 +11,7 @@ def setup_worker_directories():
 def run_transcriber_worker(task_queue, result_queue, file_event):
     print("🛠️ [工人] 正在啟動...")
     setup_worker_directories()
-    print(f"✅ [工人] 模型 'mock' 載入成功，開始監聽任務。")
+    print("✅ [工人] 模型 'mock' 載入成功，開始監聽任務。")
 
     while True:
         if task_queue.empty():

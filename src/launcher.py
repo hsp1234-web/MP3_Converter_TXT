@@ -38,6 +38,7 @@ def start_api_server(log_queue: mp.Queue, task_queue: mp.Queue, result_queue: mp
         port=config.WEBSOCKET_PORT,
         log_config=None # 禁用 uvicorn 預設日誌設定
     )
+    logger.info("API 伺服器已成功啟動。")
     logger.info("API 伺服器已關閉。")
 
 
@@ -52,7 +53,7 @@ def main(args):
     # --- 讀取設定 ---
     try:
         config = get_config(args.profile)
-        logger.info(f"--- 鳳凰錄音轉寫服務 ---")
+        logger.info("--- 鳳凰錄音轉寫服務 ---")
         logger.info(f"成功載入配置: {config.PROFILE_NAME}")
     except ValueError as e:
         logger.error(f"設定檔錯誤: {e}")
@@ -108,12 +109,17 @@ def main(args):
         logger.info("按 Ctrl+C 以終止所有服務。")
 
         # --- 主行程迴圈 ---
-        while True:
-            time.sleep(1)
-            for p in processes:
-                if not p.is_alive():
-                    logger.warning(f"行程 {p.name} (PID: {p.pid}) 已意外終止！")
-                    raise RuntimeError(f"{p.name} 已終止")
+        # 在測試模式下，我們希望應用程式在啟動後保持運行，即使沒有工作。
+        if args.profile == "testing":
+            while True:
+                time.sleep(1)
+        else:
+            while True:
+                time.sleep(1)
+                for p in processes:
+                    if not p.is_alive():
+                        logger.warning(f"行程 {p.name} (PID: {p.pid}) 已意外終止！")
+                        raise RuntimeError(f"{p.name} 已終止")
 
     except (KeyboardInterrupt, RuntimeError) as e:
         if isinstance(e, KeyboardInterrupt):
@@ -134,14 +140,16 @@ def main(args):
 
         # --- 終止所有行程 ---
         for p in reversed(processes):
-            if p.name == "LogWriterProcess": continue # 日誌行程最後關閉
+            if p.name == "LogWriterProcess":
+                continue # 日誌行程最後關閉
             if p.is_alive():
                 logger.info(f"正在終止 {p.name}...")
                 p.terminate()
 
         # 等待行程結束
         for p in reversed(processes):
-            if p.name == "LogWriterProcess": continue
+            if p.name == "LogWriterProcess":
+                continue
             p.join(timeout=5)
             if p.is_alive():
                 logger.warning(f"{p.name} 未能在5秒內結束，將被強制終止。")

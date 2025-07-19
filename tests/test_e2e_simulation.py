@@ -1,5 +1,4 @@
 import pytest
-import multiprocessing
 import time
 import httpx
 import websockets
@@ -10,8 +9,8 @@ import signal
 import subprocess
 
 # --- 測試設定 ---
-BASE_URL = "http://127.0.0.1:8000"
-WEBSOCKET_URL = "ws://127.0.0.1:8000/ws"
+BASE_URL = "http://localhost:8765"
+WEBSOCKET_URL = "ws://localhost:8765/ws"
 LOG_FILE = "phoenix_transcriber.log"
 
 @pytest.fixture(scope="module")
@@ -25,7 +24,7 @@ def running_app():
 
     # 在背景啟動應用程式
     # 使用 subprocess.Popen 以便我們可以獲取其 PID 並在之後終止它
-    command = ["python", "src/launcher.py", "--profile", "testing"]
+    command = [".venv/bin/python", "src/launcher.py", "--profile", "testing"]
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -121,8 +120,10 @@ async def test_full_e2e_simulation(running_app):
     print(log_content)
     print("--------------------")
 
-    assert "[API 伺服器]" in log_content
-    assert "[模擬工人]" in log_content
+    assert "APIServerProcess" in log_content
+    assert "API伺服器" in log_content
+    assert "MockWorkerProcess" in log_content
+    assert "模擬工人" in log_content
     assert "INFO" in log_content
     assert "鳳凰錄音轉寫服務" in log_content
     assert f"收到新任務: Job ID {job_id}" in log_content

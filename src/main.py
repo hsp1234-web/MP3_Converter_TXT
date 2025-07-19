@@ -105,9 +105,10 @@ async def upload_file(file: UploadFile = File(...)):
 
         if task_queue:
             task = {"job_id": job_id, "audio_path": str(filepath)}
+            await app.state.manager.broadcast({"status": "queued", "job_id": job_id})
             task_queue.put(task)
             logger.info(f"已將轉寫任務加入佇列: {task}")
-            return JSONResponse(content={"status": "processing", "filename": file.filename, "job_id": job_id})
+            return JSONResponse(content={"status": "queued", "filename": file.filename, "job_id": job_id})
         else:
             logger.error("任務佇列 (task_queue) 未被初始化！無法新增任務。")
             return JSONResponse(content={"status": "error", "detail": "後端服務尚未準備就緒"}, status_code=503)

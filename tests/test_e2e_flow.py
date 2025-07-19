@@ -5,7 +5,6 @@ import websockets
 import subprocess
 import time
 import os
-from multiprocessing import Process
 
 # --- 常數設定 ---
 BASE_URL = "http://127.0.0.1:8765"
@@ -78,9 +77,9 @@ def app_process():
                 print("--------------------")
 
 
-# --- 測試函式 ---
 import json
 
+# --- 測試函式 ---
 def test_full_transcription_flow(app_process):
     """
     一個完整的端對端測試案例。
