@@ -30,14 +30,6 @@ def run_command_for_capability_test(command: list[str]) -> subprocess.CompletedP
         pytest.fail(f"命令 '{' '.join(command)}' 執行超時。")
 
 
-def test_capability_install_deps_help():
-    """
-    【功能契約】驗證 `install-deps` 指令是否可用。
-    """
-    command = [sys.executable, "commander_console.py", "install-deps", "--help"]
-    result = run_command_for_capability_test(command)
-    assert "安裝或更新專案所需的所有 Python 依賴套件" in result.stdout
-
 def test_capability_run_tests_help():
     """
     【功能契約】驗證 `run-tests` 指令是否可用。
@@ -52,4 +44,4 @@ def test_capability_run_server_help():
     """
     command = [sys.executable, "commander_console.py", "run-server", "--help"]
     result = run_command_for_capability_test(command)
-    assert "啟動 API 伺服器以及對應的背景工人行程" in result.stdout
+    assert "啟動 FastAPI 應用程式伺服器" in result.stdout

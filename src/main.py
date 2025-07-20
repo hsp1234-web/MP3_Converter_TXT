@@ -1,121 +1,101 @@
-import uuid
-import aiofiles
-from pathlib import Path
-import sqlite3
-from contextlib import asynccontextmanager
+# src/main.py
+
+import asyncio
 import logging
+from contextlib import asynccontextmanager
+from pathlib import Path # 導入 pathlib
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, UploadFile, HTTPException, BackgroundTasks
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from src.core import get_logger
-from src.core import initialize_database, DATABASE_FILE, UPLOAD_DIR
 
-# --- Pre-emptive directory creation ---
-static_dir = Path("static")
-static_dir.mkdir(exist_ok=True)
+# 導入我們的狀態管理器和轉錄工作核心
+from src import model_state
+from src.transcriber_worker import process_audio_file
 
-# --- Constants & Settings ---
-logger = get_logger(__name__)
+# 設定日誌
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# --- Database Dependency ---
-def get_db():
+# --- 路徑優化 ---
+# 使用 pathlib 定義專案的根目錄和靜態檔案目錄
+# 這比使用相對字串路徑 "static/index.html" 更安全、更清晰
+APP_DIR = Path(__file__).parent.parent
+STATIC_DIR = APP_DIR / "static"
+ASSETS_DIR = APP_DIR / "assets"
+# --- 優化結束 ---
+
+
+def load_model():
     """
-    FastAPI dependency to get a database connection.
-    It also ensures the database is initialized before the first connection.
-    `check_same_thread=False` is required for SQLite with FastAPI as FastAPI
-    can use multiple threads to interact with the dependency.
+    這是一個同步的、耗時的模型載入函數。
+    注意：此函數將在一個單獨的執行緒中運行，以避免阻塞 FastAPI 的主事件循環。
     """
-    initialize_database() # Ensure table exists on every startup
-    db = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
     try:
-        yield db
-    finally:
-        db.close()
+        logger.info("背景任務：開始載入 Whisper 模型...")
+        model_state.current_status = model_state.ModelStatus.LOADING
 
-# --- Lifespan Management ---
+        from src.transcriber_worker import load_model as load_whisper_model
+        model = load_whisper_model()
+
+        model_state.model_instance = model
+        model_state.current_status = model_state.ModelStatus.READY
+        logger.info("背景任務：Whisper 模型載入成功，狀態已更新為 READY。")
+
+    except Exception as e:
+        model_state.current_status = model_state.ModelStatus.ERROR
+        logger.error(f"背景任務：模型載入失敗: {e}", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("FastAPI application startup...")
-    # Initialization is now handled by the get_db dependency
+    """
+    FastAPI 的生命週期管理器。
+    """
+    logger.info("FastAPI 服務啟動...")
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, load_model)
     yield
-    logger.info("FastAPI application shutdown...")
+    logger.info("FastAPI 服務關閉。")
 
-# --- FastAPI App Instance ---
+
 app = FastAPI(lifespan=lifespan)
 
-# --- API Endpoints ---
-@app.get("/health", status_code=200)
-async def health_check():
-    return {"status": "ok"}
+# --- API 端點 (Endpoints) ---
 
-@app.post("/upload", status_code=202)
-async def upload_file(file: UploadFile = File(...), db: sqlite3.Connection = Depends(get_db)):
-    """
-    Accepts a file upload, saves it, and creates a new transcription task in the database.
-    """
-    task_id = str(uuid.uuid4())
-    filepath = UPLOAD_DIR / f"{task_id}_{file.filename}"
-
+@app.get("/", response_class=HTMLResponse)
+async def get_root():
+    """提供前端主頁面"""
+    index_path = STATIC_DIR / "index.html"
     try:
-        async with aiofiles.open(filepath, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
-        logger.info(f"File '{file.filename}' uploaded to '{filepath}'")
+        with open(index_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        logger.error(f"錯誤：找不到 index.html 於路徑 {index_path}")
+        raise HTTPException(status_code=404, detail="index.html not found")
 
-        cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO transcription_tasks (id, original_filepath, status) VALUES (?, ?, ?)",
-            (task_id, str(filepath), 'pending')
-        )
-        db.commit()
-        logger.info(f"Task created in database with ID: {task_id}")
+@app.get("/api/status")
+async def get_status():
+    """提供模型當前狀態的 API"""
+    return JSONResponse(content={"status": model_state.current_status.value})
 
-        return {"task_id": task_id}
-
-    except Exception as e:
-        logger.error(f"File upload or database operation failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
-
-@app.get("/status/{task_id}")
-async def get_task_status(task_id: str, db: sqlite3.Connection = Depends(get_db)):
+@app.post("/api/transcribe")
+async def transcribe_audio(file: UploadFile, background_tasks: BackgroundTasks):
     """
-    Queries and returns the status and result of a task based on its ID.
+    接收音訊檔案並進行轉錄的 API。
     """
-    try:
-        db.row_factory = sqlite3.Row
-        cursor = db.cursor()
+    if model_state.current_status != model_state.ModelStatus.READY:
+        logger.warning("收到轉錄請求，但模型尚未準備就緒。")
+        raise HTTPException(status_code=503, detail="服務暫時不可用，模型正在載入中。")
 
-        cursor.execute("SELECT * FROM transcription_tasks WHERE id = ?", (task_id,))
-        task = cursor.fetchone()
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="未提供檔案。")
 
-        if task is None:
-            raise HTTPException(status_code=404, detail="Task ID not found")
+    logger.info(f"收到檔案: {file.filename}")
 
-        return dict(task)
+    background_tasks.add_task(process_audio_file, file, model_state.model_instance)
 
-    except Exception as e:
-        logger.error(f"Error querying task status for ID {task_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error querying status: {e}")
+    return JSONResponse(content={"message": f"檔案 '{file.filename}' 已接收並開始處理。"})
 
-# --- Mount Static Files ---
-app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
-
-if __name__ == "__main__":
-    import uvicorn
-    # 當直接執行此檔案時，設定一個備用的日誌系統
-    if not logger.handlers or isinstance(logger.handlers[0], logging.StreamHandler):
-        # 移除預設的 StreamHandler
-        if logger.hasHandlers():
-            logger.handlers.clear()
-
-        # 設定一個基本的檔案日誌
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            filename='main_direct_run.log',
-            filemode='w'
-        )
-        logger.info("以直接執行模式啟動，使用 main_direct_run.log 進行日誌記錄。")
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# 掛載靜態檔案目錄
+app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")

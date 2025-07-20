@@ -47,7 +47,7 @@ def live_api_server():
 
     with open("api_server.log", "w") as log_file:
         process = subprocess.Popen(
-            [sys.executable, "-u", "src/main.py"],
+                [sys.executable, "-m", "uvicorn", "src.main:app", "--host", "127.0.0.1", "--port", "8000"],
             env=env,
             stdout=log_file,
             stderr=subprocess.STDOUT
