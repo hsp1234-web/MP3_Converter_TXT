@@ -56,6 +56,40 @@ def db_init():
     print("✅ 資料庫初始化完成。")
 
 @cli.command()
+def run_worker(profile: str = "testing"):
+    """
+    啟動轉寫工人行程。
+    """
+    from src.config import get_config
+    from src.queues import task_queue, result_queue
+    from src.transcriber_worker import transcriber_worker_process
+    from src.logging_config import log_writer_process, get_logger
+    import multiprocessing as mp
+
+    print(f"INFO:     啟動工人，使用設定檔: {profile}")
+    config = get_config(profile)
+
+    # 建立日誌佇列
+    log_queue = mp.Queue()
+
+    # 啟動日誌寫入器
+    log_process = mp.Process(target=log_writer_process, args=(log_queue,))
+    log_process.start()
+
+    # 啟動工人行程
+    worker_process = mp.Process(
+        target=transcriber_worker_process,
+        args=(log_queue, task_queue, result_queue, config),
+    )
+    worker_process.start()
+
+    print("✅ 工人行程已啟動。")
+    worker_process.join()
+    log_queue.put(None) # 傳送結束信號
+    log_process.join()
+
+
+@cli.command()
 def clean():
     """
     清理專案中的快取檔案。
