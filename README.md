@@ -2,57 +2,67 @@
 
 本專案是一個模組化、可擴展的錄音轉寫服務。其核心設計理念是提供一個結構清晰、易於維護、且具備自我驗證能力的系統。
 
-## 核心原則
+---
 
-*   **萬能鑰匙 (`commander_console.py`)**: 所有後台任務、數據處理和服務啟動的唯一入口點。
-*   **活的儀表板 (`README.md`)**: 本文件，提供清晰、可執行的系統能力清單。
-*   **功能契約 (`tests/test_capabilities.py`)**: 自動化測試，確保儀表板中描述的所有能力都真實可用。
+## 🚀 一鍵啟動 (推薦)
+
+我們提供了一個 `start.sh` 腳本，它能在任何支援 Bash 的 Linux 環境（包括 Ubuntu, Debian, CentOS, and Google Colab）中，一鍵完成所有設定並啟動服務。
+
+### 如何使用？
+
+只需要在您的終端機中執行以下單行指令即可：
+
+```bash
+curl -sSL https://raw.githubusercontent.com/your-username/your-repo-name/main/start.sh | bash
+```
+**請記得替換 `your-username` 和 `your-repo-name` 為您自己的 GitHub 使用者名稱和專案庫名稱。**
+
+這個指令會：
+1.  下載 `start.sh` 腳本。
+2.  透過 `bash` 直接執行它。
+3.  腳本會自動處理環境檢查、專案下載、依賴安裝、服務啟動及網址生成的所有細節。
+
+執行完畢後，您將會直接在終端機中看到一個可公開存取的服務網址。
 
 ---
 
-## 系統能力清單 (活的儀表板)
+## 手動操作 (開發者模式)
 
-以下是可透過「萬能鑰匙」(`commander_console.py`) 執行的所有核心指令。
+如果您想深入了解或控制每一個步驟，可以依照以下方式手動操作。
 
-### 1. 安裝/更新依賴
-安裝專案所需的所有 Python 依賴套件。
+### 1. 下載專案
 ```bash
-python commander_console.py install-deps
+git clone https://github.com/your-username/your-repo-name.git
+cd your-repo-name
 ```
 
-### 2. 執行自動化測試
-執行完整的測試套件，以驗證系統所有功能的正確性。
+### 2. 執行通用啟動器
+我們提供了一個 Python 腳本 `universal_launcher.py` 來處理所有啟動細節。
 ```bash
-python commander_console.py run-tests
+chmod +x universal_launcher.py
+./universal_launcher.py
 ```
 
-### 3. 啟動服務 (測試模式)
-以 `testing` 配置啟動 API 伺服器及背景工人。此模式使用輕量級模型，適合開發與快速驗證。
+### 3. (可選) 更細緻的手動控制
+如果您連 `universal_launcher.py` 都不想使用，可以參考 `commander_console.py` 來執行更底層的操作。
 ```bash
-python commander_console.py run-server --profile testing
-```
-或者，使用預設配置：
-```bash
-python commander_console.py run-server
-```
+# 安裝依賴
+python3 commander_console.py install-deps
 
-### 4. 啟動服務 (生產模式)
-以 `production` 配置啟動服務。此模式使用更強大的模型，適用於正式部署。
-```bash
-python commander_console.py run-server --profile production
+# 執行測試
+python3 commander_console.py run-tests
+
+# 啟動伺服器
+python3 commander_console.py run-server --profile testing
 ```
 
 ---
 
-## 專案結構
+## 專案核心檔案
 
-- `commander_console.py`: 所有操作的統一入口。
+- `start.sh`: **一鍵啟動腳本**，封裝了所有操作，是使用者入門的首選。
+- `universal_launcher.py`: **通用啟動器**，被 `start.sh` 所呼叫，負責處理 Python 層面的啟動邏輯。
+- `commander_console.py`: **萬能鑰匙**，所有底層操作的統一入口，供開發者使用。
 - `pyproject.toml`: 定義專案元數據和頂層依賴。
-- `uv.lock`: 鎖定所有依賴的確切版本，確保環境可重複。
 - `src/`: 應用程式原始碼。
-  - `src/core/__init__.py`: 核心模組，整合了設定、日誌和資料庫功能。
-  - `src/main.py`: FastAPI 應用程式的進入點。
-  - `src/transcriber_worker.py`: 負責執行轉寫任務的工人。
-  - `src/mock_worker.py`: 用於測試的模擬工人。
 - `tests/`: 自動化測試。
-  - `tests/test_capabilities.py`: 「功能契約」的實現，確保本 README 中的指令有效。
