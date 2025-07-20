@@ -44,6 +44,14 @@ python commander_console.py run-server --profile production
 
 ---
 
+## 在 Google Colab 中運行
+
+如果您需要在 Google Colab 環境中部署此專案，請參閱我們的詳細指南：
+
+[**Google Colab 部署指南 (COLAB_GUIDE.md)**](./COLAB_GUIDE.md)
+
+---
+
 ## 專案結構
 
 - `commander_console.py`: 所有操作的統一入口。
