@@ -58,18 +58,46 @@ python commander_console.py clean
 
 ## 專案結構
 
-- `commander_console.py`: 所有操作的統一入口。
-- `pyproject.toml`: 定義專案元數據和頂層依賴。
-- `poetry.lock`: 鎖定所有依賴的確切版本，確保環境可重複。
-- `src/`: 應用程式原始碼。
-  - `config.py`: 定義不同環境的設定。
-  - `database.py`: 處理資料庫的初始化和操作。
-  - `logging_config.py`: 設定日誌系統。
-  - `main.py`: FastAPI 應用程式的進入點。
-  - `model_loader.py`: 負責載入 `faster-whisper` 模型。
-  - `transcriber_worker.py`: 負責執行轉寫任務的工人。
-  - `utils/`: 工具模組。
-    - `hardware.py`: 偵測硬體並返回最佳設定。
-- `tests/`: 自動化測試。
-  - `e2e/`: 端對端測試。
-  - `test_capabilities.py`: 「功能契約」的實現，確保本 README 中的指令有效。
+```
+.
+├── MP3                     # 存放 MP3 檔案的目錄
+├── README.md               # 本文件
+├── assets                  # 存放資產檔案 (例如 CSS)
+│   └── style.css
+├── commander_console.py    # 所有操作的統一入口
+├── install.sh              # 安裝腳本
+├── poetry.lock             # 鎖定所有依賴的確切版本
+├── pyproject.toml          # 定義專案元數據和頂層依賴
+├── pytest.ini              # pytest 設定檔
+├── src                     # 應用程式原始碼
+│   ├── __init__.py
+│   ├── config.py           # 定義不同環境的設定
+│   ├── database.py         # 處理資料庫的初始化和操作
+│   ├── logging_config.py   # 設定日誌系統
+│   ├── main.py             # FastAPI 應用程式的進入點
+│   ├── mock_worker.py      # 模擬的工人
+│   ├── model_loader.py     # 負責載入 faster-whisper 模型
+│   ├── model_state.py      # 管理模型狀態
+│   ├── queues.py           # 定義佇列
+│   ├── transcriber_worker.py # 負責執行轉寫任務的工人
+│   └── utils               # 工具模組
+│       └── hardware.py     # 偵測硬體並返回最佳設定
+├── static                  # 靜態檔案 (例如 HTML)
+│   └── index.html
+├── tests                   # 自動化測試
+│   ├── __init__.py
+│   ├── audio               # 測試用的音訊檔案
+│   │   └── test_audio.wav
+│   ├── conftest.py         # pytest 設定檔
+│   ├── e2e                 # 端對端測試
+│   │   ├── conftest.py
+│   │   └── test_api.py
+│   ├── ignition_test.py
+│   ├── test_capabilities.py # 「功能契約」的實現
+│   ├── test_e2e_flow.py
+│   ├── test_full_system_flow.py
+│   ├── test_server_startup.py
+│   ├── test_simple.py
+│   └── test_worker.py
+└── uploads                 # 上傳的檔案
+```
