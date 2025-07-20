@@ -10,9 +10,41 @@
 
 ---
 
-## 系統能力清單 (活的儀表板)
+## 快速啟動 (適用於任何 Ubuntu 環境)
 
-以下是可透過「萬能鑰匙」(`commander_console.py`) 執行的所有核心指令。
+我們提供了一個通用的啟動腳本 `universal_launcher.py`，它能自動化所有設定，讓您一鍵啟動服務並取得公開網址。
+
+### 如何使用？
+
+1.  **下載專案與啟動器**
+    ```bash
+    # 複製專案原始碼
+    git clone https://github.com/your-username/your-repo-name.git
+    cd your-repo-name
+    ```
+    **請記得替換 `your-username` 和 `your-repo-name` 為您自己的 GitHub 使用者名稱和專案庫名稱。**
+
+2.  **賦予執行權限**
+    ```bash
+    chmod +x universal_launcher.py
+    ```
+
+3.  **執行啟動器**
+    ```bash
+    ./universal_launcher.py
+    ```
+
+腳本將會自動：
+1.  安裝所有必要的依賴套件。
+2.  在背景啟動鳳凰專案伺服器。
+3.  透過 `localhost.run` 建立一個臨時的公開 SSH 通道。
+4.  顯示一個您可以直接點擊存取的公開網址。
+
+---
+
+## 手動操作 (開發者模式)
+
+如果您想手動控制每一個步驟，可以依照以下指令操作。
 
 ### 1. 安裝/更新依賴
 安裝專案所需的所有 Python 依賴套件。
@@ -31,10 +63,6 @@ python commander_console.py run-tests
 ```bash
 python commander_console.py run-server --profile testing
 ```
-或者，使用預設配置：
-```bash
-python commander_console.py run-server
-```
 
 ### 4. 啟動服務 (生產模式)
 以 `production` 配置啟動服務。此模式使用更強大的模型，適用於正式部署。
@@ -46,7 +74,8 @@ python commander_console.py run-server --profile production
 
 ## 專案結構
 
-- `commander_console.py`: 所有操作的統一入口。
+- `universal_launcher.py`: **推薦使用**的通用啟動器。
+- `commander_console.py`: 所有手動操作的統一入口。
 - `pyproject.toml`: 定義專案元數據和頂層依賴。
 - `uv.lock`: 鎖定所有依賴的確切版本，確保環境可重複。
 - `src/`: 應用程式原始碼。
