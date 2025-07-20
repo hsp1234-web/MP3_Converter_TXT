@@ -38,11 +38,15 @@ dependencies = [
     "pytest-timeout",
     "httpcore",
     "certifi",
-    "pytest-xprocess"
+    "pytest-xprocess",
+    "typer",
+    "requests",
+    "torch",
+    "faster-whisper"
 ]
 
 [project.optional-dependencies]
-transcribe = ["torch", "faster-whisper"]
+transcribe = []
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

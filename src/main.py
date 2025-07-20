@@ -3,28 +3,27 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path # 導入 pathlib
+from pathlib import Path
 
 from fastapi import FastAPI, UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-# 導入我們的狀態管理器和轉錄工作核心
+from src.config import get_config
+from src.database import initialize_database
+from src.logging_config import get_logger
 from src import model_state
 from src.transcriber_worker import process_audio_file
 
-# 設定日誌
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# --- 初始化 ---
+config = get_config()
+logger = get_logger(__name__)
+initialize_database()
 
-# --- 路徑優化 ---
-# 使用 pathlib 定義專案的根目錄和靜態檔案目錄
-# 這比使用相對字串路徑 "static/index.html" 更安全、更清晰
+# --- 路徑設定 ---
 APP_DIR = Path(__file__).parent.parent
 STATIC_DIR = APP_DIR / "static"
 ASSETS_DIR = APP_DIR / "assets"
-# --- 優化結束 ---
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,16 +36,8 @@ async def lifespan(app: FastAPI):
     logger.info("背景任務：開始載入 Whisper 模型...")
 
     try:
-        from faster_whisper import WhisperModel
-        from src.core.hardware import get_best_hardware_config
-
-        hardware_config = get_best_hardware_config()
-        model = WhisperModel(
-            "tiny",
-            device=hardware_config["device"],
-            compute_type=hardware_config["compute_type"]
-        )
-        model_state.model_instance = model
+        from src.model_loader import load_model
+        model_state.model_instance = load_model(config)
         model_state.current_status = model_state.ModelStatus.READY
         logger.info("背景任務：Whisper 模型載入成功，狀態已更新為 READY。")
     except Exception as e:

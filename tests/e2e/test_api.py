@@ -1,6 +1,8 @@
 # e2e/test_api.py
 import requests
+import pytest
 
+@pytest.mark.e2e
 def test_server_is_alive(live_api_server):
     """
     一個極簡測試，只用來驗證 live_api_server fixture 能否成功啟動。
