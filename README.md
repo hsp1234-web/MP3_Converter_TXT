@@ -44,6 +44,16 @@ python commander_console.py run-server --profile production
 
 ---
 
+## 在 Google Colab 中運行
+
+我們提供了一個專業的啟動器，讓您可以在 Google Colab 環境中輕鬆啟動本專案。
+
+詳細的操作說明與程式碼，請參閱：
+
+[**Google Colab 專業啟動器 (COLAB_LAUNCHER.md)**](./COLAB_LAUNCHER.md)
+
+---
+
 ## 專案結構
 
 - `commander_console.py`: 所有操作的統一入口。
