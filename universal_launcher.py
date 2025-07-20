@@ -86,7 +86,7 @@ def monitor_server_log(timeout=60):
     start_time = time.time()
     while time.time() - start_time < timeout:
         if LOG_FILE_PATH.exists():
-            with open(LOG_FILE_PATH, 'r') as f:
+            with open(LOG_FILE_PATH, 'r', encoding='utf-8', errors='ignore') as f:
                 for line in f:
                     if "Uvicorn running on" in line:
                         print_success("偵測到 Uvicorn 伺服器成功運行！")

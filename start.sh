@@ -31,6 +31,9 @@ print_error() {
 
 # --- 腳本主體 ---
 main() {
+    # 強制關閉可能佔用 8000 連接埠的進程
+    fuser -k 8000/tcp || true
+
     # 當腳本被中斷或出錯時，確保所有子行程都被關閉
     trap 'cleanup_and_exit' SIGINT SIGTERM ERR
 
@@ -50,25 +53,15 @@ main() {
     fi
     print_success "Python 3 已安裝。"
 
-    print_step "步驟 2: 下載或更新專案原始碼"
-
-    REPO_URL="https://github.com/your-username/your-repo-name.git" #! 請替換成您的專案庫網址
-    DEST_FOLDER="phoenix_project"
-
-    if [ -d "$DEST_FOLDER" ]; then
-        print_info "找到專案資料夾，正在嘗試更新..."
-        cd "$DEST_FOLDER"
-        git pull || print_info "Git pull 失敗，可能是本地有修改。將使用現有版本繼續。"
-        cd ..
-    else
-        print_info "正在從 $REPO_URL 下載專案..."
-        git clone "$REPO_URL" "$DEST_FOLDER" || { print_error "專案下載失敗。"; exit 1; }
+    # 檢查 psmisc (包含 fuser)
+    if ! command -v fuser &> /dev/null; then
+        print_info "未找到 fuser，正在嘗試安裝 psmisc..."
+        sudo apt-get update && sudo apt-get install -y psmisc || { print_error "psmisc 安裝失敗，請手動安裝後再試。"; exit 1; }
+        hash -r
     fi
-    print_success "專案原始碼已準備就緒。"
+    print_success "fuser 已安裝。"
 
-    cd "$DEST_FOLDER"
-
-    print_step "步驟 3: 啟動通用啟動器"
+    print_step "步驟 2: 啟動通用啟動器"
 
     if [ ! -f "universal_launcher.py" ]; then
         print_error "找不到 'universal_launcher.py'。請確認專案庫中包含此檔案。"

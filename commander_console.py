@@ -41,12 +41,16 @@ def start_api_server(log_queue: mp.Queue, task_queue: mp.Queue, result_queue: mp
     main.result_queue = result_queue
 
     logger.info(f"API 伺服器即將在 http://{config.WEBSOCKET_HOST}:{config.WEBSOCKET_PORT} 上運行")
-    uvicorn.run(
-        app,
-        host=config.WEBSOCKET_HOST,
-        port=config.WEBSOCKET_PORT,
-        log_config=None
-    )
+    try:
+        uvicorn.run(
+            app,
+            host=config.WEBSOCKET_HOST,
+            port=config.WEBSOCKET_PORT,
+            log_config=None,
+            log_level="debug"
+        )
+    except Exception as e:
+        logger.error(f"Uvicorn 運行時發生錯誤: {e}")
     logger.info("API 伺服器已關閉。")
 
 
@@ -112,6 +116,7 @@ def launcher_main(profile: str):
             for p in processes:
                 if not p.is_alive():
                     logger.warning(f"行程 {p.name} (PID: {p.pid}) 已意外終止！")
+                    logger.warning(f"行程 {p.name} 的 exitcode 是: {p.exitcode}")
                     raise RuntimeError(f"{p.name} 已終止")
 
     except (KeyboardInterrupt, RuntimeError) as e:
