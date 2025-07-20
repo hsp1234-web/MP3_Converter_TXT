@@ -27,28 +27,41 @@ def run_server(host: str = "127.0.0.1", port: int = 8000):
 @cli.command()
 def run_tests():
     """
-    執行完整的自動化測試套件，並自動設定正確的 PYTHONPATH。
+    執行單元和整合測試（排除 E2E 測試）。
     """
     import subprocess
     import os
-    print("==> 正在設定測試環境...")
+    print("==> 正在執行單元/整合測試...")
     test_env = os.environ.copy()
-    # 關鍵修正：將專案根目錄加入 PYTHONPATH，讓測試能找到模組
-    project_root = os.path.abspath(os.path.dirname(__file__))
-    current_pythonpath = test_env.get("PYTHONPATH", "")
-    test_env["PYTHONPATH"] = f".:{current_pythonpath}"
+    test_env["PYTHONPATH"] = str(ROOT_DIR)
 
-    print(f"==> PYTHONPATH 已設定為: {test_env['PYTHONPATH']}")
-    print("==> 正在啟動 pytest...")
+    command = ["python", "-m", "pytest", "-v", "--ignore=e2e"]
+
     try:
-        # 使用修改後的環境變數來執行測試
-        subprocess.check_call(["python", "-m", "pytest", "-v"], env=test_env)
-        print("==> 所有測試皆已通過。")
+        subprocess.check_call(command, env=test_env)
+        print("✅ 單元/整合測試通過。")
     except subprocess.CalledProcessError as e:
-        print(f"==> 測試失敗: {e}")
+        print(f"❌ 單元/整合測試失敗: {e}")
         sys.exit(1)
-    except FileNotFoundError:
-        print("==> 錯誤: 'pytest' 未找到。請先執行 'install-deps'。")
+
+@cli.command()
+def run_e2e_tests():
+    """
+    獨立執行端對端（E2E）測試。
+    """
+    import subprocess
+    import os
+    print("==> 正在執行 E2E 測試...")
+    test_env = os.environ.copy()
+    test_env["PYTHONPATH"] = str(ROOT_DIR)
+
+    command = ["python", "-m", "pytest", "-v", "e2e/"]
+
+    try:
+        subprocess.check_call(command, env=test_env)
+        print("✅ E2E 測試通過。")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ E2E 測試失敗: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

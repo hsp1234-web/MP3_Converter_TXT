@@ -3,9 +3,9 @@ import time
 from src.core import get_logger
 from src.core import DATABASE_FILE
 
-def process_single_task(db_connection):
+def process_audio_file(file, model_instance):
     """
-    處理單個轉錄任務。
+    處理上傳的音訊檔案。
     """
     from faster_whisper import WhisperModel
     from src.core.hardware import get_best_hardware_config

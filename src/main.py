@@ -26,37 +26,38 @@ ASSETS_DIR = APP_DIR / "assets"
 # --- 優化結束 ---
 
 
-def load_model():
-    """
-    這是一個同步的、耗時的模型載入函數。
-    注意：此函數將在一個單獨的執行緒中運行，以避免阻塞 FastAPI 的主事件循環。
-    """
-    try:
-        logger.info("背景任務：開始載入 Whisper 模型...")
-        model_state.current_status = model_state.ModelStatus.LOADING
-
-        from src.transcriber_worker import load_model as load_whisper_model
-        model = load_whisper_model()
-
-        model_state.model_instance = model
-        model_state.current_status = model_state.ModelStatus.READY
-        logger.info("背景任務：Whisper 模型載入成功，狀態已更新為 READY。")
-
-    except Exception as e:
-        model_state.current_status = model_state.ModelStatus.ERROR
-        logger.error(f"背景任務：模型載入失敗: {e}", exc_info=True)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     FastAPI 的生命週期管理器。
+    在伺服器啟動時載入模型，在關閉時清理。
     """
     logger.info("FastAPI 服務啟動...")
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, load_model)
+    model_state.current_status = model_state.ModelStatus.LOADING
+    logger.info("背景任務：開始載入 Whisper 模型...")
+
+    try:
+        from faster_whisper import WhisperModel
+        from src.core.hardware import get_best_hardware_config
+
+        hardware_config = get_best_hardware_config()
+        model = WhisperModel(
+            "tiny",
+            device=hardware_config["device"],
+            compute_type=hardware_config["compute_type"]
+        )
+        model_state.model_instance = model
+        model_state.current_status = model_state.ModelStatus.READY
+        logger.info("背景任務：Whisper 模型載入成功，狀態已更新為 READY。")
+    except Exception as e:
+        model_state.current_status = model_state.ModelStatus.ERROR
+        logger.error(f"背景任務：模型載入失敗: {e}", exc_info=True)
+
     yield
-    logger.info("FastAPI 服務關閉。")
+
+    # 清理工作
+    model_state.model_instance = None
+    logger.info("FastAPI 服務關閉，模型已卸載。")
 
 
 app = FastAPI(lifespan=lifespan)
