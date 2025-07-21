@@ -54,7 +54,7 @@ def start_api_server(log_queue: mp.Queue, task_queue: mp.Queue, result_queue: mp
     logger.info("API 伺服器已關閉。")
 
 
-def launcher_main(profile: str):
+def launcher_main(profile: str, num_workers: int):
     """
     這是從 src/launcher.py 移植過來的主函式，負責啟動並管理所有子行程。
     """
@@ -96,12 +96,13 @@ def launcher_main(profile: str):
             worker_target = transcriber_worker_process
             worker_name = "IntelligentWorkerProcess"
 
-        worker_process_instance = mp.Process(
-            target=worker_target,
-            args=(log_queue, task_queue, result_queue, config),
-            name=worker_name
-        )
-        processes.append(worker_process_instance)
+        for i in range(num_workers):
+            worker_process_instance = mp.Process(
+                target=worker_target,
+                args=(log_queue, task_queue, result_queue, config),
+                name=f"{worker_name}-{i+1}"
+            )
+            processes.append(worker_process_instance)
 
         for p in processes:
             p.daemon = True
@@ -159,11 +160,18 @@ def launcher_main(profile: str):
     default="testing",
     help="選擇要使用的作戰配置 (預設: testing)"
 )
-def run_server(profile):
+@click.option(
+    "--num-workers",
+    type=int,
+    default=1,
+    help="要啟動的轉寫工人數量 (預設: 1)"
+)
+def run_server(profile, num_workers):
     """
     啟動 API 伺服器以及對應的背景工人行程。
     """
     click.echo(f"==> 準備以 '{profile}' 配置啟動服務...")
+    click.echo(f"==> 將啟動 {num_workers} 個轉寫工人...")
     # 設定 multiprocessing 啟動方法
     # 在某些系統上，需要 force=True
     if sys.platform == "darwin":
@@ -171,7 +179,7 @@ def run_server(profile):
     else:
          mp.set_start_method("spawn")
 
-    launcher_main(profile)
+    launcher_main(profile, num_workers)
 
 
 @cli.command(name="install-deps")

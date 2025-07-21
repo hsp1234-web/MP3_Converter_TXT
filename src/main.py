@@ -1,16 +1,16 @@
 """主應用程式檔案."""
-import logging
-import sqlite3
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncGenerator, Iterator
+from typing import Any, AsyncGenerator
 
 import aiofiles
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+import aiosqlite
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 
 from src.core import DATABASE_FILE, UPLOAD_DIR, get_logger, initialize_database
+from src.queues import add_task_to_queue
 
 # --- Pre-emptive directory creation ---
 static_dir = Path("static")
@@ -20,29 +20,12 @@ static_dir.mkdir(exist_ok=True)
 logger = get_logger(__name__)
 
 
-# --- Database Dependency ---
-def get_db() -> Iterator[sqlite3.Connection]:
-    """
-    FastAPI dependency to get a database connection.
-
-    It also ensures the database is initialized before the first connection.
-    `check_same_thread=False` is required for SQLite with FastAPI as FastAPI
-    can use multiple threads to interact with the dependency.
-    """
-    initialize_database()  # Ensure table exists on every startup
-    db = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 # --- Lifespan Management ---
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Handle application startup and shutdown events."""
     logger.info("FastAPI application startup...")
-    # Initialization is now handled by the get_db dependency
+    await initialize_database()
     yield
     logger.info("FastAPI application shutdown...")
 
@@ -61,7 +44,6 @@ async def health_check() -> dict[str, str]:
 @app.post("/upload", status_code=202)
 async def upload_file(
     file: UploadFile = File(...),
-    db: sqlite3.Connection = Depends(get_db),
 ) -> dict[str, str]:
     """Accept a file upload, save it, and create a new transcription task."""
     task_id = str(uuid.uuid4())
@@ -69,22 +51,24 @@ async def upload_file(
 
     try:
         async with aiofiles.open(filepath, "wb") as out_file:
-            content = await file.read()
-            await out_file.write(content)
+            while content := await file.read(1024 * 1024):  # Read in 1MB chunks
+                await out_file.write(content)
         logger.info("File '%s' uploaded to '%s'", file.filename, filepath)
 
-        cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO transcription_tasks (id, original_filepath, status) VALUES (?, ?, ?)",
-            (task_id, str(filepath), "pending"),
-        )
-        db.commit()
+        async with aiosqlite.connect(DATABASE_FILE) as db:
+            await db.execute(
+                "INSERT INTO transcription_tasks (id, original_filepath) VALUES (?, ?)",
+                (task_id, str(filepath)),
+            )
+            await db.commit()
+
+        await add_task_to_queue(task_id)
         logger.info("Task created in database with ID: %s", task_id)
 
     except IOError as e:
         logger.exception("File operation failed: %s", e)
         raise HTTPException(status_code=500, detail="File operation failed.") from e
-    except sqlite3.Error as e:
+    except aiosqlite.Error as e:
         logger.exception("Database operation failed: %s", e)
         raise HTTPException(status_code=500, detail="Database operation failed.") from e
 
@@ -94,22 +78,22 @@ async def upload_file(
 @app.get("/status/{task_id}")
 async def get_task_status(
     task_id: str,
-    db: sqlite3.Connection = Depends(get_db),
 ) -> dict[str, Any]:
     """Query and return the status and result of a task based on its ID."""
     try:
-        db.row_factory = sqlite3.Row
-        cursor = db.cursor()
-
-        cursor.execute("SELECT * FROM transcription_tasks WHERE id = ?", (task_id,))
-        task = cursor.fetchone()
+        async with aiosqlite.connect(DATABASE_FILE) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM transcription_tasks WHERE id = ?", (task_id,)
+            ) as cursor:
+                task = await cursor.fetchone()
 
         if task is None:
             raise HTTPException(status_code=404, detail="Task ID not found")
 
         return dict(task)
 
-    except sqlite3.Error as e:
+    except aiosqlite.Error as e:
         logger.exception("Error querying task status for ID %s: %s", task_id, e)
         raise HTTPException(status_code=500, detail="Error querying status.") from e
 

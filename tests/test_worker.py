@@ -3,37 +3,39 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from src.core import get_logger
 from src.transcriber_worker import process_single_task
 
 if TYPE_CHECKING:
-    import sqlite3
+    import aiosqlite
 
 
-def test_worker_success_scenario(db_connection: sqlite3.Connection) -> None:
+@pytest.mark.asyncio
+async def test_worker_success_scenario(db_connection: aiosqlite.Connection) -> None:
     """測試工人成功處理任務的場景."""
     # Arrange
-    cursor = db_connection.cursor()
     # 確保每次測試都在乾淨的狀態下運行
-    cursor.execute("DELETE FROM transcription_tasks WHERE id = 'test_success'")
-    db_connection.commit()
-    cursor.execute(
+    await db_connection.execute("DELETE FROM transcription_tasks WHERE id = 'test_success'")
+    await db_connection.commit()
+    await db_connection.execute(
         "INSERT INTO transcription_tasks (id, original_filepath, status) VALUES (?, ?, ?)",
         ("test_success", "tests/audio/test_audio.wav", "pending"),
     )
-    db_connection.commit()
+    await db_connection.commit()
 
     # Act
     # 在這個測試中, 我們需要一個模擬的日誌佇列
     # 初始化一個假的日誌記錄器, 這樣就不會因為沒有佇列而報錯
     get_logger("轉錄工人")
-    process_single_task(db_connection)
+    await process_single_task()
 
     # Assert
-    cursor.execute(
+    async with db_connection.execute(
         "SELECT status, result_text FROM transcription_tasks WHERE id = 'test_success'",
-    )
-    task = cursor.fetchone()
+    ) as cursor:
+        task = await cursor.fetchone()
     assert task is not None, "任務 'test_success' 未在資料庫中找到"
     status, result_text = task
     assert status == "completed"

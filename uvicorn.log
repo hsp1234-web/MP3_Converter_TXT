@@ -1,0 +1,6 @@
+2025-07-21 01:41:47,015 - MainProcess - src.main - WARNING - 未提供日誌佇列, 日誌將輸出到控制台.
+INFO:     Started server process [4381]
+INFO:     Waiting for application startup.
+2025-07-21 01:41:47,024 - MainProcess - src.main - INFO - FastAPI application startup...
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

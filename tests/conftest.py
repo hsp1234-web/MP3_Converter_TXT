@@ -1,6 +1,6 @@
 """Pytest 設定檔案."""
 import os
-import sqlite3
+import aiosqlite
 import subprocess
 import sys
 import time
@@ -19,8 +19,9 @@ def add_project_root_to_path() -> None:
         sys.path.insert(0, str(project_root))
 
 
-@pytest.fixture()
-def db_connection() -> Generator[sqlite3.Connection, None, None]:
+@pytest.fixture
+@pytest.mark.asyncio
+async def db_connection() -> Generator[aiosqlite.Connection, None, None]:
     """提供一個乾淨的、用於測試的 SQLite 資料庫連線."""
     from src.core import DATABASE_FILE, initialize_database
 
@@ -28,11 +29,11 @@ def db_connection() -> Generator[sqlite3.Connection, None, None]:
     if db_path.exists():
         db_path.unlink()
 
-    initialize_database()
+    await initialize_database()
 
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = await aiosqlite.connect(DATABASE_FILE)
     yield conn
-    conn.close()
+    await conn.close()
 
     if db_path.exists():
         db_path.unlink()
