@@ -35,7 +35,6 @@ import shutil
 import re
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from collections import deque
 
 # Colab 專用模組
 from google.colab import output as colab_output
@@ -234,7 +233,7 @@ try:
         content = config_path.read_text(encoding='utf-8')
         new_content = re.sub(r"(MODEL_SIZE\s*=\s*)\"[^\"]*\"", f'\\g<1>\"{MODEL_SIZE}\"', content)
         config_path.write_text(new_content, encoding='utf-8')
-        log_message(f"✅ AI 模型已設定完畢。")
+        log_message("✅ AI 模型已設定完畢。")
     else:
         log_message(f"⚠️ 警告: 未在 {config_path} 找到設定檔，將使用專案預設模型。")
 

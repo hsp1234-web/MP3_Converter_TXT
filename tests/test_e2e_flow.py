@@ -5,7 +5,6 @@ import asyncio
 import time
 from pathlib import Path
 
-import aiofiles
 import httpx
 import pytest
 

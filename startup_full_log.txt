@@ -1,0 +1,114 @@
+--- [階段 2] 驗證並同步 Poetry 環境 ---
+正在安裝/同步依賴...
+Installing dependencies from lock file
+
+No dependencies to install or update
+
+Installing the current project: src (0.1.0)
+--- [階段 3] 執行「領航員」預檢系統 ---
+執行 Ruff 靜態掃描...
+colab_deployment_script.py:29:1: E402 Module level import not at top of file
+colab_deployment_script.py:30:1: E402 Module level import not at top of file
+colab_deployment_script.py:31:1: E402 Module level import not at top of file
+colab_deployment_script.py:32:1: E402 Module level import not at top of file
+colab_deployment_script.py:33:1: E402 Module level import not at top of file
+colab_deployment_script.py:34:1: E402 Module level import not at top of file
+colab_deployment_script.py:35:1: E402 Module level import not at top of file
+colab_deployment_script.py:36:1: E402 Module level import not at top of file
+colab_deployment_script.py:37:1: E402 Module level import not at top of file
+colab_deployment_script.py:40:1: E402 Module level import not at top of file
+colab_deployment_script.py:41:1: E402 Module level import not at top of file
+colab_deployment_script.py:71:36: E701 Multiple statements on one line (colon)
+colab_deployment_script.py:224:30: E701 Multiple statements on one line (colon)
+colab_deployment_script.py:299:5: E722 Do not use bare `except`
+commander_console.py:16:1: E402 Module level import not at top of file
+commander_console.py:17:1: E402 Module level import not at top of file
+commander_console.py:18:1: E402 Module level import not at top of file
+commander_console.py:19:1: E402 Module level import not at top of file
+initialize_db.py:17:1: E402 Module level import not at top of file
+src/main.py:21:1: E402 Module level import not at top of file
+src/mock_worker.py:31:21: F841 Local variable `result` is assigned to but never used
+src/queues.py:38:1: E402 Module level import not at top of file
+tests/ignition_test.py:4:1: E402 Module level import not at top of file
+tests/ignition_test.py:6:1: E402 Module level import not at top of file
+tests/ignition_test.py:7:1: E402 Module level import not at top of file
+tests/test_capabilities.py:71:9: F841 Local variable `result` is assigned to but never used
+Found 26 errors.
+No fixes available (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
+執行 Deptry 依賴檢查...
+Assuming the corresponding module name of package 'torch' is 'torch'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'faster-whisper' is 'faster_whisper'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Scanning 16 files...
+
+[1mcolab_deployment_script.py[m[36m:[m40[36m:[m1[36m:[m [1m[31mDEP001[m 'google' imported but missing from the dependency definitions
+[1mcolab_deployment_script.py[m[36m:[m41[36m:[m1[36m:[m [1m[31mDEP001[m 'IPython' imported but missing from the dependency definitions
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'python-multipart' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'httpx' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'pytest' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'websockets' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'pytest-asyncio' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'sqlalchemy' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'opencc-python-reimplemented' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'pluggy' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'pygments' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'iniconfig' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'idna' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'starlette' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'pydantic' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'pydantic-core' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'typing_extensions' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'typing-inspection' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'annotated-types' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'anyio' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'sniffio' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'h11' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'pytest-timeout' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'httpcore' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'certifi' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'pytest-xprocess' defined as a dependency but not used in the codebase
+[1m[31mFound 26 dependency issues.[m
+
+For more information, see the documentation: https://deptry.com/
+執行 Ignition Test 導入測試...
+============================= test session starts ==============================
+platform linux -- Python 3.12.11, pytest-8.4.1, pluggy-1.6.0
+rootdir: /app
+configfile: pyproject.toml
+plugins: asyncio-1.1.0, xprocess-1.0.2, timeout-2.4.0, anyio-4.9.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+timeout: 30.0s
+timeout method: signal
+timeout func_only: False
+collected 1 item
+
+tests/ignition_test.py .                                                 [100%]
+
+=============================== warnings summary ===============================
+../home/jules/.cache/pypoetry/virtualenvs/src-9TtSrW0h-py3.12/lib/python3.12/site-packages/_pytest/fixtures.py:1392
+  /home/jules/.cache/pypoetry/virtualenvs/src-9TtSrW0h-py3.12/lib/python3.12/site-packages/_pytest/fixtures.py:1392: PytestRemovedIn9Warning: Marks applied to fixtures have no effect
+  See docs: https://docs.pytest.org/en/stable/deprecations.html#applying-a-mark-to-a-fixture-function
+    return fixture_marker(fixture_function)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========================= 1 passed, 1 warning in 0.84s =========================
+--- [階段 4] 初始化資料庫 ---
+2025-07-21 10:31:46,825 - [INFO] - root - --- [資料庫初始化]：開始 ---
+2025-07-21 10:31:46,828 - [INFO] - src.core - 資料庫 'transcription_tasks.db' 和目錄 'uploads' 已成功初始化.
+2025-07-21 10:31:46,828 - [INFO] - root - --- [資料庫初始化]：成功 ---
+--- [階段 5] 啟動主服務 ---
+使用 commander_console.py 啟動服務，預設 2 個工人...
+2025-07-21 10:31:49 - [INFO] - root - (MainProcess:8928) - 成功從 logging_config.yaml 加載結構化日誌配置。
+==> 準備以 'testing' 配置啟動服務...
+==> 將啟動 2 個轉寫工人...
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - --- 鳳凰錄音轉寫服務 ---
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - 成功載入配置: 測試模式 (Testing)
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - 核心作戰準則：擁抱韌性設計、建立可觀測性。
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - 已成功建立任務佇列與結果佇列。
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - 偵測到 'testing' 環境，將啟動模擬工人。
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - 正在啟動 APIServerProcess 行程...
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - 正在啟動 MockWorker-1 行程...
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - 正在啟動 MockWorker-2 行程...
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - 所有核心服務已啟動。主行程將保持運行以監控子行程。
+2025-07-21 10:31:49 - [INFO] - Launcher - (MainProcess:8928) - 按 Ctrl+C 以終止所有服務。
+2025-07-21 10:31:50,460 - [INFO] - MockWorker - 模擬工人行程已啟動。
+2025-07-21 10:31:50,492 - [INFO] - MockWorker - 模擬工人行程已啟動。

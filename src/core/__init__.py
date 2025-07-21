@@ -7,10 +7,7 @@
 """
 import logging
 import logging.handlers
-import multiprocessing as mp
 import aiosqlite
-import sys
-import traceback
 from pathlib import Path
 from typing import Type
 

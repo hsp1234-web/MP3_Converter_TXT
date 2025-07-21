@@ -6,7 +6,6 @@
 它利用 SQLite 資料庫作為後端, 確保即使在應用程式重新啟動後,
 任務也不會遺失.
 """
-import asyncio
 from typing import Optional
 
 import aiosqlite
@@ -36,7 +35,7 @@ async def add_task_to_queue(task_id: str) -> None:
         raise
 
 
-from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=5), reraise=True)
 async def get_task_from_queue() -> Optional[str]:

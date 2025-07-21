@@ -11,7 +11,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.core import DATABASE_FILE, UPLOAD_DIR, get_logger
+from src.core import DATABASE_FILE, UPLOAD_DIR
 from src.queues import add_task_to_queue
 
 # --- Pre-emptive directory creation ---
@@ -37,6 +37,16 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 # --- FastAPI App Instance ---
 app = FastAPI(lifespan=lifespan)
+
+# --- State Initialization for Standalone Debugging ---
+# In a production environment, these queues are provided by the main launcher.
+# For independent debugging (e.g., running with `start_api_only.sh`),
+# we initialize them here to prevent AttributeError.
+import multiprocessing as mp
+if not hasattr(app.state, 'task_queue'):
+    app.state.task_queue = mp.Queue()
+if not hasattr(app.state, 'result_queue'):
+    app.state.result_queue = mp.Queue()
 
 
 # --- API Endpoints ---

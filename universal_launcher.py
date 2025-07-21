@@ -13,7 +13,6 @@
 - 通用性：無需修改即可在不同 Ubuntu 環境中運行。
 """
 
-import os
 import sys
 import time
 import subprocess
@@ -138,7 +137,7 @@ def start_ssh_tunnel(port):
         stderr_thread.join(timeout=5)
 
         if output_holder["url"]:
-            print_success(f"成功獲取公開網址！")
+            print_success("成功獲取公開網址！")
             return process, output_holder["url"]
 
         print_error("無法從 localhost.run 的輸出中找到網址。")
@@ -172,7 +171,7 @@ def main():
 
         print("\n" + "="*50)
         print(f"{Color.BOLD}🎉 鳳凰專案已成功啟動！ 🎉{Color.END}")
-        print(f"您可以透過以下公開網址存取服務：")
+        print("您可以透過以下公開網址存取服務：")
         print(f"{Color.GREEN}{Color.BOLD}👉 {public_url} 👈{Color.END}")
         print("="*50)
         print("\n(本腳本會持續運行以保持服務開啟，按 Ctrl+C 即可關閉所有服務)")

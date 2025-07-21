@@ -44,7 +44,7 @@ def cli():
     setup_logging()
 
 
-def start_api_server(config):
+def start_api_server(task_queue, result_queue, config):
     """
     啟動 FastAPI (Uvicorn) 伺服器。
     此函數在一個獨立的子行程中執行。
@@ -55,8 +55,12 @@ def start_api_server(config):
     # 將隊列傳遞給 FastAPI 應用實例
     # 注意：現在不再需要傳遞 log_queue
     from src import main
-    main.task_queue = app.state.task_queue
-    main.result_queue = app.state.result_queue
+    main.task_queue = task_queue
+    main.result_queue = result_queue
+    # 同時也放到 app.state 中，以防萬一有其他地方依賴它
+    app.state.task_queue = task_queue
+    app.state.result_queue = result_queue
+
 
     logger.info(f"API 伺服器即將在 http://{config.WEBSOCKET_HOST}:{config.WEBSOCKET_PORT} 上運行")
     try:
@@ -97,7 +101,7 @@ def launcher_main(profile: str, num_workers: int):
         # 不再需要獨立的 log_writer_process
         api_process = mp.Process(
             target=start_api_server,
-            args=(config,),
+            args=(app.state.task_queue, app.state.result_queue, config),
             name="APIServerProcess"
         )
         processes.append(api_process)
@@ -208,76 +212,7 @@ def run_tests():
     except FileNotFoundError:
         click.secho("==> 錯誤: 'poetry' 未找到或專案未初始化。", fg="red")
         sys.exit(1)
-)
-def run_server(profile, num_workers):
-    """
-    啟動 API 伺服器以及對應的背景工人行程。
-    """
-    click.echo(f"==> 準備以 '{profile}' 配置啟動服務...")
-    click.echo(f"==> 將啟動 {num_workers} 個轉寫工人...")
-    # 設定 multiprocessing 啟動方法
-    # 在某些系統上，需要 force=True
-    if sys.platform == "darwin":
-         mp.set_start_method("spawn", force=True)
-    else:
-         mp.set_start_method("spawn")
 
-    launcher_main(profile, num_workers)
-
-
-@cli.command(name="install-deps")
-def install_deps():
-    """
-    使用 uv 安裝或更新專案所需的所有 Python 依賴套件。
-    如果 uv 不存在，會先自動安裝。
-    """
-    # --- 步驟 1: 檢查 uv 是否存在 ---
-    try:
-        subprocess.check_call([sys.executable, "-m", "uv", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("==> uv 已安裝。")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        click.echo("==> 'uv' 未找到，正在自動安裝...")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"])
-            click.secho("==> uv 安裝成功。", fg="green")
-        except subprocess.CalledProcessError as e:
-            click.secho(f"==> uv 安裝失敗: {e}", fg="red")
-            sys.exit(1)
-
-    # --- 步驟 2: 使用 uv 安裝依賴 ---
-    click.echo("==> 正在使用 uv 安裝/更新依賴套件 (來自 pyproject.toml)...")
-    try:
-        subprocess.check_call([sys.executable, "-m", "uv", "pip", "install", "-p", sys.executable, "."])
-        click.secho("==> 依賴套件安裝成功。", fg="green")
-    except subprocess.CalledProcessError as e:
-        click.secho(f"==> 依賴套件安裝失敗: {e}", fg="red")
-        sys.exit(1)
-
-
-@cli.command(name="run-tests")
-def run_tests():
-    """
-    執行完整的自動化測試套件，並自動設定正確的 PYTHONPATH。
-    """
-    click.echo("==> 正在設定測試環境...")
-    test_env = os.environ.copy()
-    # 關鍵修正：將專案根目錄加入 PYTHONPATH，讓測試能找到模組
-    project_root = os.path.abspath(os.path.dirname(__file__))
-    current_pythonpath = test_env.get("PYTHONPATH", "")
-    test_env["PYTHONPATH"] = f".:{current_pythonpath}"
-
-    click.echo(f"==> PYTHONPATH 已設定為: {test_env['PYTHONPATH']}")
-    click.echo("==> 正在啟動 pytest...")
-    try:
-        # 使用修改後的環境變數來執行測試
-        subprocess.check_call([sys.executable, "-m", "pytest", "-v"], env=test_env)
-        click.secho("==> 所有測試皆已通過。", fg="green")
-    except subprocess.CalledProcessError as e:
-        click.secho(f"==> 測試失敗: {e}", fg="red")
-        sys.exit(1)
-    except FileNotFoundError:
-        click.secho("==> 錯誤: 'pytest' 未找到。請先執行 'install-deps'。", fg="red")
-        sys.exit(1)
 
 
 if __name__ == "__main__":

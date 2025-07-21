@@ -1,11 +1,9 @@
 """轉錄工人模組."""
 import asyncio
 import multiprocessing as mp
-import time
 from typing import Any
 
 import aiosqlite
-from faster_whisper import WhisperModel
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.core import DATABASE_FILE, get_logger
@@ -46,6 +44,7 @@ async def process_single_task() -> None:
                 return  # 如果多次重試後仍然失敗，則放棄此任務
 
             # 執行轉錄
+            from faster_whisper import WhisperModel
             hardware_config = get_best_hardware_config()
             model = WhisperModel(
                 "tiny",  # Using tiny for testing

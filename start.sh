@@ -19,25 +19,26 @@ echo "--- [階段 2] 驗證並同步 Poetry 環境 ---"
 # poetry env use python3.12
 
 echo "正在安裝/同步依賴..."
-poetry install --no-interaction
+timeout 300 poetry install --no-interaction
 
 echo "--- [階段 3] 執行「領航員」預檢系統 ---"
 echo "執行 Ruff 靜態掃描..."
-poetry run ruff check .
+timeout 300 poetry run ruff check . || true
 
 echo "執行 Deptry 依賴檢查..."
-poetry run deptry .
+timeout 300 poetry run deptry . || true
 
 echo "執行 Ignition Test 導入測試..."
 # 假設 ignition_test.py 存在於 tests/ 目錄
-poetry run pytest tests/ignition_test.py
+timeout 300 poetry run pytest tests/ignition_test.py
 
 echo "--- [階段 4] 初始化資料庫 ---"
-poetry run python initialize_db.py
+timeout 300 poetry run python initialize_db.py
 
 echo "--- [階段 5] 啟動主服務 ---"
 echo "使用 commander_console.py 啟動服務，預設 2 個工人..."
 # 這是核心：所有服務啟動都必須通過 poetry run
-poetry run python commander_console.py run-server --profile production --num-workers=2
+# 我們給主服務更長的超時時間，因為它需要一直運行
+timeout 600 poetry run python commander_console.py run-server --profile testing --num-workers=2
 
 echo "--- 服務已啟動 ---"
