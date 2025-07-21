@@ -38,7 +38,10 @@ dependencies = [
     "pytest-timeout",
     "httpcore",
     "certifi",
-    "pytest-xprocess"
+    "pytest-xprocess",
+    "tenacity (>=9.1.2,<10.0.0)",
+    "aiosqlite (>=0.20.0,<0.21.0)",
+    "pyyaml (>=6.0.1,<7.0.0)"
 ]
 
 [project.optional-dependencies]
@@ -54,3 +57,7 @@ timeout = 30
 pythonpath = [
   "."
 ]
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.1"
+deptry = "0.15.0" # 固定到一個已知版本，繞過解析問題

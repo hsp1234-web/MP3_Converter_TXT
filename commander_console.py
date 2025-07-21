@@ -1,10 +1,38 @@
-import click
+import logging
+import logging.config
+import multiprocessing as mp
 import os
-import sys
 import subprocess
+import sys
+import time
+import uvicorn
+import yaml
+import click
 
 # --- 確保 src 目錄在 Python 路徑中 ---
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+# 由於我們已經將 src 加入 sys.path，可以直接從 src 導入
+from src.core import get_config
+from src.main import app
+from src.mock_worker import mock_worker_process
+from src.transcriber_worker import transcriber_worker_process
+
+
+def setup_logging():
+    """讀取 YAML 配置文件並設定全域日誌記錄。"""
+    config_file = "logging_config.yaml"
+    if os.path.exists(config_file):
+        with open(config_file, "rt") as f:
+            log_config = yaml.safe_load(f.read())
+        logging.config.dictConfig(log_config)
+        logging.info("成功從 %s 加載結構化日誌配置。", config_file)
+    else:
+        # 如果配置文件不存在，提供一個基本的備用配置
+        logging.basicConfig(level=logging.INFO,
+                            format='%(asctime)s - [%(levelname)s] - %(name)s - %(message)s')
+        logging.warning("未找到 %s，已啟用基本日誌配置。", config_file)
+
 
 # --- 主命令群組 ---
 @click.group()
@@ -13,32 +41,22 @@ def cli():
     鳳凰錄音轉寫服務 - 統一指揮控制台。
     這是專案所有後台任務、數據處理和服務啟動的唯一入口。
     """
-    pass
+    setup_logging()
 
-# --- 整合 launcher.py 的邏輯 ---
-import time
-import uvicorn
-import multiprocessing as mp
 
-# 由於我們已經將 src 加入 sys.path，可以直接從 src 導入
-from src.main import app
-from src.core import get_config
-from src.transcriber_worker import transcriber_worker_process
-from src.mock_worker import mock_worker_process
-from src.core import get_logger, log_writer_process
-
-def start_api_server(log_queue: mp.Queue, task_queue: mp.Queue, result_queue: mp.Queue, config):
+def start_api_server(config):
     """
     啟動 FastAPI (Uvicorn) 伺服器。
     此函數在一個獨立的子行程中執行。
     """
-    logger = get_logger("API伺服器", log_queue)
+    logger = logging.getLogger("APIServer")
     logger.info("準備啟動 API 伺服器...")
 
+    # 將隊列傳遞給 FastAPI 應用實例
+    # 注意：現在不再需要傳遞 log_queue
     from src import main
-    main.log_queue = log_queue
-    main.task_queue = task_queue
-    main.result_queue = result_queue
+    main.task_queue = app.state.task_queue
+    main.result_queue = app.state.result_queue
 
     logger.info(f"API 伺服器即將在 http://{config.WEBSOCKET_HOST}:{config.WEBSOCKET_PORT} 上運行")
     try:
@@ -46,11 +64,10 @@ def start_api_server(log_queue: mp.Queue, task_queue: mp.Queue, result_queue: mp
             app,
             host=config.WEBSOCKET_HOST,
             port=config.WEBSOCKET_PORT,
-            log_config=None,
-            log_level="debug"
+            log_config=None,  # 我們已經配置了全局日誌，禁用 uvicorn 的
         )
-    except Exception as e:
-        logger.error(f"Uvicorn 運行時發生錯誤: {e}")
+    except Exception:
+        logger.exception("Uvicorn 運行時發生錯誤")
     logger.info("API 伺服器已關閉。")
 
 
@@ -58,8 +75,7 @@ def launcher_main(profile: str, num_workers: int):
     """
     這是從 src/launcher.py 移植過來的主函式，負責啟動並管理所有子行程。
     """
-    log_queue = mp.Queue()
-    logger = get_logger("智慧啟動器", log_queue)
+    logger = logging.getLogger("Launcher")
 
     try:
         config = get_config(profile)
@@ -73,34 +89,33 @@ def launcher_main(profile: str, num_workers: int):
 
     processes = []
     try:
-        task_queue = mp.Queue()
-        result_queue = mp.Queue()
-        logger.info("已成功建立任務佇列、結果佇列與日誌佇列。")
+        # 使用 app.state 來管理隊列，使其在 uvicorn 應用中也可用
+        app.state.task_queue = mp.Queue()
+        app.state.result_queue = mp.Queue()
+        logger.info("已成功建立任務佇列與結果佇列。")
 
-        log_writer = mp.Process(target=log_writer_process, args=(log_queue,), name="LogWriterProcess")
-        processes.append(log_writer)
-
+        # 不再需要獨立的 log_writer_process
         api_process = mp.Process(
             target=start_api_server,
-            args=(log_queue, task_queue, result_queue, config),
+            args=(config,),
             name="APIServerProcess"
         )
         processes.append(api_process)
 
+        worker_target = mock_worker_process if profile == "testing" else transcriber_worker_process
+        worker_name_prefix = "MockWorker" if profile == "testing" else "TranscriberWorker"
+
         if profile == "testing":
             logger.info("偵測到 'testing' 環境，將啟動模擬工人。")
-            worker_target = mock_worker_process
-            worker_name = "MockWorkerProcess"
         else:
             logger.info("將啟動真實的轉錄工人。")
-            worker_target = transcriber_worker_process
-            worker_name = "IntelligentWorkerProcess"
 
         for i in range(num_workers):
+            # 注意：不再需要傳遞 log_queue
             worker_process_instance = mp.Process(
                 target=worker_target,
-                args=(log_queue, task_queue, result_queue, config),
-                name=f"{worker_name}-{i+1}"
+                args=(app.state.task_queue, app.state.result_queue, config),
+                name=f"{worker_name_prefix}-{i+1}"
             )
             processes.append(worker_process_instance)
 
@@ -128,27 +143,11 @@ def launcher_main(profile: str, num_workers: int):
 
     finally:
         logger.info("開始執行關閉程序...")
-        if 'worker_process_instance' in locals() and worker_process_instance.is_alive():
-            try:
-                logger.info("正在發送關閉信號至工人行程...")
-                task_queue.put(None, timeout=1)
-            except Exception as e:
-                logger.warning(f"發送關閉信號至工人失敗: {e}，可能將強制終止。")
-
         for p in reversed(processes):
-            if p.name == "LogWriterProcess": continue
             if p.is_alive():
                 logger.info(f"正在終止 {p.name}...")
                 p.terminate()
-
-        for p in reversed(processes):
-            if p.name == "LogWriterProcess": continue
-            p.join(timeout=5)
-
-        if 'log_writer' in locals() and log_writer.is_alive():
-            logger.info("正在關閉日誌書記官行程...")
-            log_queue.put(None)
-            log_writer.join(timeout=2)
+                p.join(timeout=5)
 
         logger.info("所有服務已關閉。再會。")
 
@@ -157,14 +156,58 @@ def launcher_main(profile: str, num_workers: int):
 @click.option(
     "--profile",
     type=click.Choice(["testing", "production"], case_sensitive=False),
-    default="testing",
-    help="選擇要使用的作戰配置 (預設: testing)"
+    default="production",
+    help="選擇要使用的作戰配置 (預設: production)"
 )
 @click.option(
     "--num-workers",
     type=int,
     default=1,
     help="要啟動的轉寫工人數量 (預設: 1)"
+)
+def run_server(profile, num_workers):
+    """
+    啟動 API 伺服器以及對應的背景工人行程。
+    """
+    click.echo(f"==> 準備以 '{profile}' 配置啟動服務...")
+    click.echo(f"==> 將啟動 {num_workers} 個轉寫工人...")
+    if sys.platform == "darwin":
+        mp.set_start_method("spawn", force=True)
+    else:
+        mp.set_start_method("spawn", force=True) # 在 Linux 上也建議使用 spawn
+
+    launcher_main(profile, num_workers)
+
+
+@cli.command(name="install-deps")
+def install_deps():
+    """
+    使用 Poetry 安裝或更新專案所需的所有 Python 依賴套件。
+    """
+    click.echo("==> 正在使用 Poetry 安裝/同步依賴套件...")
+    try:
+        subprocess.check_call(["poetry", "install", "--no-interaction"])
+        click.secho("==> 依賴套件安裝成功。", fg="green")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        click.secho(f"==> 依賴套件安裝失敗: {e}", fg="red")
+        sys.exit(1)
+
+
+@cli.command(name="run-tests")
+def run_tests():
+    """
+    使用 Poetry 執行完整的自動化測試套件。
+    """
+    click.echo("==> 正在啟動 pytest...")
+    try:
+        subprocess.check_call(["poetry", "run", "pytest", "-v"])
+        click.secho("==> 所有測試皆已通過。", fg="green")
+    except subprocess.CalledProcessError:
+        click.secho("==> 部分或全部測試失敗。", fg="red")
+        sys.exit(1)
+    except FileNotFoundError:
+        click.secho("==> 錯誤: 'poetry' 未找到或專案未初始化。", fg="red")
+        sys.exit(1)
 )
 def run_server(profile, num_workers):
     """

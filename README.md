@@ -1,3 +1,32 @@
+# 【系統能力清單 (System Capabilities)】
+<!--
+此處的命令是本系統對外的「功能契約」。
+`tests/test_capabilities.py` 會自動驗證此處的所有命令是否有效。
+修改或新增命令時，請確保同步更新測試。
+-->
+
+- **啟動完整服務 (生產模式)**:
+  ```bash
+  ./start.sh
+  ```
+
+- **執行所有測試**:
+  ```bash
+  poetry run pytest
+  ```
+
+- **執行 Ruff 靜態掃描**:
+  ```bash
+  poetry run ruff check .
+  ```
+
+- **檢查依賴一致性**:
+  ```bash
+  poetry run deptry .
+  ```
+
+---
+
 # 鳳凰專案 (Phoenix Project)
 
 本專案是一個模組化、可擴展的錄音轉寫服務。其核心設計理念是提供一個結構清晰、易於維護、且具備自我驗證能力的系統。

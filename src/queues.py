@@ -36,15 +36,22 @@ async def add_task_to_queue(task_id: str) -> None:
         raise
 
 
+from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=5), reraise=True)
 async def get_task_from_queue() -> Optional[str]:
     """
     從佇列中獲取一個待處理的任務.
 
     此函數會尋找狀態為 'pending' 的任務, 將其狀態更新為 'processing',
     然後返回其 ID. 這是原子操作, 以避免多個工人獲取同一個任務.
+    增加了 tenacity 重試機制以應對短暫的資料庫連接問題。
 
     Returns:
         Optional[str]: 如果找到待處理任務, 則返回任務 ID; 否則返回 None.
+
+    Raises:
+        RetryError: 如果在指定次數後仍然無法連接資料庫。
     """
     try:
         async with aiosqlite.connect(DATABASE_FILE) as db:
@@ -64,7 +71,10 @@ async def get_task_from_queue() -> Optional[str]:
                     return task_id
             return None
     except aiosqlite.Error as e:
-        logger.exception("從佇列獲取任務時發生資料庫錯誤: %s", e)
+        logger.warning("從佇列獲取任務時發生資料庫錯誤，將進行重試: %s", e)
+        raise  # 重新引發異常以觸發 tenacity 的重試
+    except Exception as e:
+        logger.exception("從佇列獲取任務時發生非預期錯誤: %s", e)
         return None
 
 

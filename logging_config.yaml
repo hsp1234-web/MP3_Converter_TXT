@@ -1,0 +1,50 @@
+# 【結構化日誌配置 v1.0】
+# 使用 YAML 格式定義 Python 的 logging 模組行為
+
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  # 標準格式，用於控制台和日誌文件
+  standard:
+    format: '%(asctime)s - [%(levelname)s] - %(name)s - (%(processName)s:%(process)d) - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+  # 控制台處理器，將 INFO 及以上級別的日誌輸出到 stderr
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stderr
+
+  # 文件處理器，將 DEBUG 及以上級別的日誌寫入文件
+  # 使用 TimedRotatingFileHandler 可以按時間自動分割日誌
+  file:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: DEBUG
+    formatter: standard
+    filename: app.log # 日誌文件名
+    when: 'midnight' # 每天午夜分割
+    backupCount: 7 # 保留最近 7 天的日誌
+    encoding: utf-8
+
+# 根日誌記錄器配置
+# 所有未被明確指定的 logger 都會使用此配置
+root:
+  level: DEBUG
+  handlers: [console, file]
+  propagate: yes
+
+# 特定模組的日誌記錄器配置 (可選)
+# 例如，可以為 'tenacity' 設定較高的日誌級別，以減少重試時的日誌噪音
+loggers:
+  tenacity:
+    level: WARNING
+    handlers: [console, file]
+    propagate: no # 不再將 tenacity 的日誌向 root logger 傳播
+
+  aiosqlite:
+    level: INFO
+    handlers: [console, file]
+    propagate: no

@@ -4,13 +4,31 @@ import multiprocessing as mp
 import time
 from typing import Any
 
-from faster_whisper import WhisperModel
-
 import aiosqlite
+from faster_whisper import WhisperModel
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.core import DATABASE_FILE, get_logger
 from src.core.hardware import get_best_hardware_config
 from src.queues import get_task_from_queue, update_task_status
+
+
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10))
+async def connect_to_database_with_retry(task_id: str) -> str | None:
+    """使用 tenacity 重試機制連接資料庫並獲取音頻文件路徑。"""
+    logger = get_logger("資料庫連接器")
+    logger.info("任務 %s：正在嘗試連接資料庫...", task_id)
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        async with db.execute(
+            "SELECT original_filepath FROM transcription_tasks WHERE id = ?",
+            (task_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                logger.error("在資料庫中找不到任務 %s 的檔案路徑。", task_id)
+                return None
+            logger.info("任務 %s：成功連接資料庫並獲取路徑。", task_id)
+            return row[0]
 
 
 async def process_single_task() -> None:
@@ -22,6 +40,11 @@ async def process_single_task() -> None:
         logger.info("找到待處理任務: %s", task_id)
 
         try:
+            # 透過帶有重試機制的函數獲取音頻路徑
+            audio_path = await connect_to_database_with_retry(task_id)
+            if not audio_path:
+                return  # 如果多次重試後仍然失敗，則放棄此任務
+
             # 執行轉錄
             hardware_config = get_best_hardware_config()
             model = WhisperModel(
@@ -29,16 +52,6 @@ async def process_single_task() -> None:
                 device=hardware_config["device"],
                 compute_type=hardware_config["compute_type"],
             )
-            async with aiosqlite.connect(DATABASE_FILE) as db:
-                async with db.execute(
-                    "SELECT original_filepath FROM transcription_tasks WHERE id = ?",
-                    (task_id,),
-                ) as cursor:
-                    row = await cursor.fetchone()
-                    if not row:
-                        logger.error("在資料庫中找不到任務 %s 的檔案路徑。", task_id)
-                        return
-                    audio_path = row[0]
             segments, _info = model.transcribe(audio_path, beam_size=5)
             full_transcript = "".join(segment.text for segment in segments)
             logger.info("任務 %s: 轉錄完成.", task_id)
@@ -50,19 +63,18 @@ async def process_single_task() -> None:
             logger.info("任務 %s 狀態更新為: completed", task_id)
 
         except Exception as e:
-            logger.exception("轉錄任務 %s 過程中發生錯誤", task_id)
+            logger.exception("轉錄任務 %s 過程中發生無法恢復的錯誤", task_id)
             await update_task_status(task_id, "failed", error_message=str(e))
             logger.info("任務 %s 狀態更新為: failed", task_id)
 
 
 def transcriber_worker_process(
-    log_queue: mp.Queue,
-    _task_queue: mp.Queue,
-    _result_queue: mp.Queue,
+    task_queue: mp.Queue,
+    result_queue: mp.Queue,
     _config: dict[str, Any],
 ) -> None:
     """工人的主循環, 現在作為一個獨立的行程函數."""
-    logger = get_logger("轉錄工人", log_queue)
+    logger = get_logger("轉錄工人")
     logger.info("真實轉錄工人行程已啟動")
 
     async def main() -> None:

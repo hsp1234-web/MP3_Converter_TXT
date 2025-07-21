@@ -13,6 +13,25 @@ files = [
 ]
 
 [[package]]
+name = "aiosqlite"
+version = "0.20.0"
+description = "asyncio bridge to the standard sqlite3 module"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "aiosqlite-0.20.0-py3-none-any.whl", hash = "sha256:36a1deaca0cac40ebe32aac9977a6e2bbc7f5189f23f4a54d5908986729e5bd6"},
+    {file = "aiosqlite-0.20.0.tar.gz", hash = "sha256:6d35c8c256637f4672f843c31021464090805bf925385ac39473fb16eaaca3d7"},
+]
+
+[package.dependencies]
+typing_extensions = ">=4.0"
+
+[package.extras]
+dev = ["attribution (==1.7.0)", "black (==24.2.0)", "coverage[toml] (==7.4.1)", "flake8 (==7.0.0)", "flake8-bugbear (==24.2.6)", "flit (==3.9.0)", "mypy (==1.8.0)", "ufmt (==2.3.0)", "usort (==1.0.8.post1)"]
+docs = ["sphinx (==7.2.6)", "sphinx-mdinclude (==0.5.3)"]
+
+[[package]]
 name = "annotated-types"
 version = "0.7.0"
 description = "Reusable constraint types to use with typing.Annotated"
@@ -224,7 +243,7 @@ version = "8.2.1"
 description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.10"
-groups = ["main"]
+groups = ["main", "dev"]
 files = [
     {file = "click-8.2.1-py3-none-any.whl", hash = "sha256:61a3265b914e850b85317d0b3109c7f8cd35a670f963866005d6ef1d5175a12b"},
     {file = "click-8.2.1.tar.gz", hash = "sha256:27c491cc05d968d271d5a1db13e3b5a184636d9d930f148c50b038f0d0646202"},
@@ -239,7 +258,7 @@ version = "0.4.6"
 description = "Cross-platform colored terminal text."
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
-groups = ["main"]
+groups = ["main", "dev"]
 markers = "platform_system == \"Windows\" or sys_platform == \"win32\""
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
@@ -305,6 +324,30 @@ files = [
 numpy = "*"
 pyyaml = ">=5.3,<7"
 setuptools = "*"
+
+[[package]]
+name = "deptry"
+version = "0.15.0"
+description = "A command line utility to check for unused, missing and transitive dependencies in a Python project."
+optional = false
+python-versions = ">=3.8"
+groups = ["dev"]
+files = [
+    {file = "deptry-0.15.0-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:8a0fa28239f404f89f5999cf384d64afb9f7ebadfc87ed833f084360958f0832"},
+    {file = "deptry-0.15.0-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:e0b37fe5f25036367b71276b1e1f1a368bf3e5c188e9131de90a61d04760fc88"},
+    {file = "deptry-0.15.0-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:05ebce4266b8a6d392d9df9cd336762c690362cbfbfb4673d29da1d9dff55d78"},
+    {file = "deptry-0.15.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:be723b484cff8da1065fa76925d873bbc3b266c072c80ab97e96f3f82973c253"},
+    {file = "deptry-0.15.0-cp38-abi3-win_amd64.whl", hash = "sha256:0646ef872039df5d4c37ea4a04e79f9ce707de79ca45e1d326ef4608156c8592"},
+    {file = "deptry-0.15.0-pp310-pypy310_pp73-macosx_10_12_x86_64.whl", hash = "sha256:5117dbf35704674bcd14c690633a959f9b9342874c5af8214bf3ec26cb17dfd2"},
+    {file = "deptry-0.15.0-pp310-pypy310_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:78342d6410958a5486885d43d82237505a1e6e987a00afa8b80841d530c98d86"},
+    {file = "deptry-0.15.0-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8372e9a632e58487e1500d784aaa5ab389ae863c645a98d2246abb6405deebc7"},
+    {file = "deptry-0.15.0-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:c55e39ce3ebe66d9f99e67e3611993a359db93ce955a5c8d83314307e6101c0e"},
+    {file = "deptry-0.15.0.tar.gz", hash = "sha256:f8e0eadfdb56446693dd3398786c0a6921ce7c9001f0e7268282da0c66c3d1ac"},
+]
+
+[package.dependencies]
+click = ">=8.0.0,<9"
+colorama = {version = ">=0.4.6", markers = "sys_platform == \"win32\""}
 
 [[package]]
 name = "fastapi"
@@ -1606,6 +1649,33 @@ socks = ["PySocks (>=1.5.6,!=1.5.7)"]
 use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
+name = "ruff"
+version = "0.1.15"
+description = "An extremely fast Python linter and code formatter, written in Rust."
+optional = false
+python-versions = ">=3.7"
+groups = ["dev"]
+files = [
+    {file = "ruff-0.1.15-py3-none-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:5fe8d54df166ecc24106db7dd6a68d44852d14eb0729ea4672bb4d96c320b7df"},
+    {file = "ruff-0.1.15-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:6f0bfbb53c4b4de117ac4d6ddfd33aa5fc31beeaa21d23c45c6dd249faf9126f"},
+    {file = "ruff-0.1.15-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e0d432aec35bfc0d800d4f70eba26e23a352386be3a6cf157083d18f6f5881c8"},
+    {file = "ruff-0.1.15-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:9405fa9ac0e97f35aaddf185a1be194a589424b8713e3b97b762336ec79ff807"},
+    {file = "ruff-0.1.15-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:c66ec24fe36841636e814b8f90f572a8c0cb0e54d8b5c2d0e300d28a0d7bffec"},
+    {file = "ruff-0.1.15-py3-none-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:6f8ad828f01e8dd32cc58bc28375150171d198491fc901f6f98d2a39ba8e3ff5"},
+    {file = "ruff-0.1.15-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:86811954eec63e9ea162af0ffa9f8d09088bab51b7438e8b6488b9401863c25e"},
+    {file = "ruff-0.1.15-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:fd4025ac5e87d9b80e1f300207eb2fd099ff8200fa2320d7dc066a3f4622dc6b"},
+    {file = "ruff-0.1.15-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b17b93c02cdb6aeb696effecea1095ac93f3884a49a554a9afa76bb125c114c1"},
+    {file = "ruff-0.1.15-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:ddb87643be40f034e97e97f5bc2ef7ce39de20e34608f3f829db727a93fb82c5"},
+    {file = "ruff-0.1.15-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:abf4822129ed3a5ce54383d5f0e964e7fef74a41e48eb1dfad404151efc130a2"},
+    {file = "ruff-0.1.15-py3-none-musllinux_1_2_i686.whl", hash = "sha256:6c629cf64bacfd136c07c78ac10a54578ec9d1bd2a9d395efbee0935868bf852"},
+    {file = "ruff-0.1.15-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:1bab866aafb53da39c2cadfb8e1c4550ac5340bb40300083eb8967ba25481447"},
+    {file = "ruff-0.1.15-py3-none-win32.whl", hash = "sha256:2417e1cb6e2068389b07e6fa74c306b2810fe3ee3476d5b8a96616633f40d14f"},
+    {file = "ruff-0.1.15-py3-none-win_amd64.whl", hash = "sha256:3837ac73d869efc4182d9036b1405ef4c73d9b1f88da2413875e34e0d6919587"},
+    {file = "ruff-0.1.15-py3-none-win_arm64.whl", hash = "sha256:9a933dfb1c14ec7a33cceb1e49ec4a16b51ce3c20fd42663198746efc0427360"},
+    {file = "ruff-0.1.15.tar.gz", hash = "sha256:f6dfa8c1b21c913c326919056c390966648b680966febcb796cc9d1aaab8564e"},
+]
+
+[[package]]
 name = "setuptools"
 version = "80.9.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
@@ -1772,6 +1842,22 @@ mpmath = ">=1.1.0,<1.4"
 
 [package.extras]
 dev = ["hypothesis (>=6.70.0)", "pytest (>=7.1.0)"]
+
+[[package]]
+name = "tenacity"
+version = "9.1.2"
+description = "Retry code until it succeeds"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "tenacity-9.1.2-py3-none-any.whl", hash = "sha256:f77bf36710d8b73a50b2dd155c97b870017ad21afe6ab300326b0371b3b05138"},
+    {file = "tenacity-9.1.2.tar.gz", hash = "sha256:1169d376c297e7de388d18b4481760d478b0e99a777cad3a9c86e556f4b697cb"},
+]
+
+[package.extras]
+doc = ["reno", "sphinx"]
+test = ["pytest", "tornado (>=4.5)", "typeguard"]
 
 [[package]]
 name = "tokenizers"
@@ -2247,4 +2333,4 @@ transcribe = ["faster-whisper", "torch"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "e205d546bb9c84e402481502239a4bdd58db6dd5f23b3efe307871e9cbc57456"
+content-hash = "0a1aaab4445df0a560f98f9f1da4b29e11ca16160be7db95096bbc8288032cd9"

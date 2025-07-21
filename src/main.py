@@ -1,4 +1,5 @@
 """主應用程式檔案."""
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -7,17 +8,20 @@ from typing import Any, AsyncGenerator
 import aiofiles
 import aiosqlite
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.core import DATABASE_FILE, UPLOAD_DIR, get_logger, initialize_database
+from src.core import DATABASE_FILE, UPLOAD_DIR, get_logger
 from src.queues import add_task_to_queue
 
 # --- Pre-emptive directory creation ---
 static_dir = Path("static")
 static_dir.mkdir(exist_ok=True)
 
+import logging
+
 # --- Constants & Settings ---
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 # --- Lifespan Management ---
@@ -25,7 +29,8 @@ logger = get_logger(__name__)
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Handle application startup and shutdown events."""
     logger.info("FastAPI application startup...")
-    await initialize_database()
+    # The database initialization is now part of the server's responsibility
+    # await initialize_database()
     yield
     logger.info("FastAPI application shutdown...")
 
@@ -36,9 +41,59 @@ app = FastAPI(lifespan=lifespan)
 
 # --- API Endpoints ---
 @app.get("/health", status_code=200)
-async def health_check() -> dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "ok"}
+async def health_check() -> dict[str, Any]:
+    """
+    深度健康檢查端點。
+
+    此端點不僅確認服務正在運行，還會檢查其核心依賴項的狀態，
+    包括資料庫連接和任務佇列的健康狀況。
+    """
+    db_status = "ok"
+    db_error = None
+    queue_status = "ok"
+    queue_size = -1
+
+    # 1. 檢查資料庫連接
+    try:
+        async with aiosqlite.connect(DATABASE_FILE, timeout=5) as db:
+            # 執行一個簡單的、不消耗資源的查詢
+            await db.execute("PRAGMA quick_check;")
+    except Exception as e:
+        db_status = "error"
+        db_error = str(e)
+        logger.error("健康檢查：資料庫連接失敗: %s", e)
+
+    # 2. 檢查任務佇列
+    try:
+        # 假設 task_queue 是 multiprocessing.Queue
+        # 注意：qsize() 可能不是 100% 精確，但在健康檢查中足夠了
+        if hasattr(app.state, 'task_queue'):
+            queue_size = app.state.task_queue.qsize()
+        else:
+            queue_status = "unavailable"
+    except Exception as e:
+        queue_status = "error"
+        logger.error("健康檢查：無法獲取任務佇列狀態: %s", e)
+
+
+    # 3. 構建並返回響應
+    response_payload = {
+        "status": "ok" if db_status == "ok" and queue_status == "ok" else "error",
+        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        "dependencies": {
+            "database": {
+                "status": db_status,
+                "error": db_error
+            },
+            "task_queue": {
+                "status": queue_status,
+                "queue_size": queue_size
+            }
+        }
+    }
+
+    status_code = 200 if response_payload["status"] == "ok" else 503
+    return JSONResponse(content=response_payload, status_code=status_code)
 
 
 @app.post("/upload", status_code=202)
@@ -100,23 +155,3 @@ async def get_task_status(
 
 # --- Mount Static Files ---
 app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
-
-if __name__ == "__main__":
-    import uvicorn
-
-    # 當直接執行此檔案時，設定一個備用的日誌系統
-    if not logger.handlers or isinstance(logger.handlers[0], logging.StreamHandler):
-        # 移除預設的 StreamHandler
-        if logger.hasHandlers():
-            logger.handlers.clear()
-
-        # 設定一個基本的檔案日誌
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            filename="main_direct_run.log",
-            filemode="w",
-        )
-        logger.info("以直接執行模式啟動, 使用 main_direct_run.log 進行日誌記錄.")
-
-    uvicorn.run(app, host="127.0.0.1", port=8000)
