@@ -51,9 +51,19 @@ def live_api_server() -> Generator[str, None, None]:
     if log_path.exists():
         log_path.unlink()
 
+    # 使用 uvicorn 啟動
+    command = [
+        "uvicorn",
+        "src.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000",
+    ]
+
     with log_path.open("w") as log_file:
         process = subprocess.Popen(
-            [sys.executable, "-u", "src/main.py"],
+            command,
             env=env,
             stdout=log_file,
             stderr=subprocess.STDOUT,
@@ -77,20 +87,12 @@ def live_api_server() -> Generator[str, None, None]:
         logs = log_path.read_text()
         pytest.fail(f"API 伺服器啟動失敗. 日誌:\n{logs}")
 
-    yield base_url
+    try:
+        yield base_url
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
 
-    process.terminate()
 
-
-@pytest.fixture(scope="session")
-def live_worker() -> Generator[None, None, None]:
-    """啟動並管理 Transcriber Worker 的生命週期."""
-    env = os.environ.copy()
-    project_root = Path(__file__).resolve().parent.parent
-    env["PYTHONPATH"] = f"{project_root}:{env.get('PYTHONPATH', '')}"
-    process = subprocess.Popen(
-        [sys.executable, "-u", "src/transcriber_worker.py"],
-        env=env,
-    )
-    yield
-    process.terminate()
+# The live_worker fixture is no longer needed, as the lifespan manager
+# now handles worker processes.

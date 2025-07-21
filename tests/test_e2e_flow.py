@@ -1,79 +1,56 @@
 """端到端流程測試."""
-from __future__ import annotations
-
-import asyncio
 import time
 from pathlib import Path
-
-import httpx
+from fastapi.testclient import TestClient
 import pytest
 
-# --- Constants ---
-POLL_INTERVAL = 0.5
-TEST_TIMEOUT = 60
+from src.main import app
 
-
-@pytest.mark.asyncio()
-async def test_full_transcription_flow(live_api_server: str) -> None:
+@pytest.mark.e2e
+def test_full_transcription_flow_with_testclient(db_connection):
     """
-    一個完整的端到端測試案例.
-
-    1. 上傳一個檔案並獲取 task_id.
-    2. 輪詢狀態端點, 直到任務完成或失敗.
-    3. 驗證最終結果.
+    一個使用 TestClient 的完整端到端測試案例。
     """
-    base_url = live_api_server  # Use the URL from the fixture
-    start_time = time.time()
+    del db_connection  # 我們只需要 fixture 的副作用（初始化資料庫）
+    with TestClient(app) as client:
+        # lifespan startup is triggered here
 
-    # --- Step 1: Upload a mock audio file ---
-    mock_audio_path = Path("test_audio.wav")
-    mock_audio_path.write_bytes(
-        b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\xbb\x00\x00\x00\xee\x02\x00\x04\x00\x10\x00data\x00\x00\x00\x00",
-    )
+        # --- Step 1: 上傳一個模擬音訊檔案 ---
+        mock_audio_path = Path("test_audio.wav")
+        mock_audio_path.write_bytes(
+            b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\xbb\x00\x00\x00\xee\x02\x00\x04\x00\x10\x00data\x00\x00\x00\x00"
+        )
 
-    task_id = None
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            with mock_audio_path.open("rb") as f:
-                files = {"file": (mock_audio_path.name, f, "audio/wav")}
+        with mock_audio_path.open("rb") as f:
+            files = {"file": (mock_audio_path.name, f, "audio/wav")}
+            response = client.post("/upload", files=files)
 
-                response = await client.post(f"{base_url}/upload", files=files)
-
-        response.raise_for_status()  # Will raise an exception for 4xx/5xx responses
         assert response.status_code == 202
+        task_id = response.json().get("task_id")
+        assert task_id is not None
 
-        response_data = response.json()
-        assert "task_id" in response_data
-        task_id = response_data["task_id"]
-
-        # --- Step 2: Poll the status endpoint ---
+        # --- Step 2: 輪詢狀態 ---
+        start_time = time.time()
+        timeout = 20  # seconds
         final_status = None
-        while time.time() - start_time < TEST_TIMEOUT:
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.get(f"{base_url}/status/{task_id}")
-
-            response.raise_for_status()
+        while time.time() - start_time < timeout:
+            response = client.get(f"/status/{task_id}")
+            assert response.status_code == 200
             status_data = response.json()
-            current_status = status_data.get("status")
-
-            # Because we don't have a real worker, we expect the status to remain 'pending'
-            # In a full E2E test with a worker, we would check for 'completed'
-            if current_status == "pending":
-                # For this test, just confirming it's pending is enough
+            # 因為 lifespan 啟動的是 mock_worker，它只會 sleep，不會更新資料庫
+            # 所以我們預期狀態會一直保持 pending
+            # 在這個測試中，我們的主要目標是驗證 API->Queue 的流程是通的
+            if status_data.get("status") == "pending":
                 final_status = status_data
                 break
+            time.sleep(1)
 
-            await asyncio.sleep(POLL_INTERVAL)
-        else:
-            pytest.fail(
-                f"Test timed out after {TEST_TIMEOUT} seconds, task did not reach expected state.",
-            )
-
-        # --- Step 3: Validate the final result ---
-        assert final_status is not None, "Did not get a final status after polling."
+        assert final_status is not None, "任務狀態不是 pending"
         assert final_status["status"] == "pending"
 
-    finally:
-        # Clean up the test file
+
+        # --- Step 3: 清理 ---
         if mock_audio_path.exists():
             mock_audio_path.unlink()
+
+    # lifespan shutdown is triggered here

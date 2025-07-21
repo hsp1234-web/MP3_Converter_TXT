@@ -1,187 +1,19 @@
 import logging
-import logging.config
-import multiprocessing as mp
 import os
 import subprocess
 import sys
-import time
-import uvicorn
-import yaml
 import click
-
-# --- 確保 src 目錄在 Python 路徑中 ---
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
-# 由於我們已經將 src 加入 sys.path，可以直接從 src 導入
-from src.core import get_config
-from src.main import app
-from src.mock_worker import mock_worker_process
-from src.transcriber_worker import transcriber_worker_process
-
-
-def setup_logging():
-    """讀取 YAML 配置文件並設定全域日誌記錄。"""
-    config_file = "logging_config.yaml"
-    if os.path.exists(config_file):
-        with open(config_file, "rt") as f:
-            log_config = yaml.safe_load(f.read())
-        logging.config.dictConfig(log_config)
-        logging.info("成功從 %s 加載結構化日誌配置。", config_file)
-    else:
-        # 如果配置文件不存在，提供一個基本的備用配置
-        logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s - [%(levelname)s] - %(name)s - %(message)s')
-        logging.warning("未找到 %s，已啟用基本日誌配置。", config_file)
-
 
 # --- 主命令群組 ---
 @click.group()
 def cli():
     """
-    鳳凰錄音轉寫服務 - 統一指揮控制台。
-    這是專案所有後台任務、數據處理和服務啟動的唯一入口。
+    鳳凰錄音轉寫服務 - 離線任務控制台。
+    此控制台用於執行一次性的維護、安裝和測試任務。
+    服務啟動請直接使用 start.sh。
     """
-    setup_logging()
-
-
-def start_api_server(task_queue, result_queue, config):
-    """
-    啟動 FastAPI (Uvicorn) 伺服器。
-    此函數在一個獨立的子行程中執行。
-    """
-    logger = logging.getLogger("APIServer")
-    logger.info("準備啟動 API 伺服器...")
-
-    # 將隊列傳遞給 FastAPI 應用實例
-    # 注意：現在不再需要傳遞 log_queue
-    from src import main
-    main.task_queue = task_queue
-    main.result_queue = result_queue
-    # 同時也放到 app.state 中，以防萬一有其他地方依賴它
-    app.state.task_queue = task_queue
-    app.state.result_queue = result_queue
-
-
-    logger.info(f"API 伺服器即將在 http://{config.WEBSOCKET_HOST}:{config.WEBSOCKET_PORT} 上運行")
-    try:
-        uvicorn.run(
-            app,
-            host=config.WEBSOCKET_HOST,
-            port=config.WEBSOCKET_PORT,
-            log_config=None,  # 我們已經配置了全局日誌，禁用 uvicorn 的
-        )
-    except Exception:
-        logger.exception("Uvicorn 運行時發生錯誤")
-    logger.info("API 伺服器已關閉。")
-
-
-def launcher_main(profile: str, num_workers: int):
-    """
-    這是從 src/launcher.py 移植過來的主函式，負責啟動並管理所有子行程。
-    """
-    logger = logging.getLogger("Launcher")
-
-    try:
-        config = get_config(profile)
-        logger.info("--- 鳳凰錄音轉寫服務 ---")
-        logger.info(f"成功載入配置: {config.PROFILE_NAME}")
-    except ValueError as e:
-        logger.error(f"設定檔錯誤: {e}")
-        return
-
-    logger.info("核心作戰準則：擁抱韌性設計、建立可觀測性。")
-
-    processes = []
-    try:
-        # 使用 app.state 來管理隊列，使其在 uvicorn 應用中也可用
-        app.state.task_queue = mp.Queue()
-        app.state.result_queue = mp.Queue()
-        logger.info("已成功建立任務佇列與結果佇列。")
-
-        # 不再需要獨立的 log_writer_process
-        api_process = mp.Process(
-            target=start_api_server,
-            args=(app.state.task_queue, app.state.result_queue, config),
-            name="APIServerProcess"
-        )
-        processes.append(api_process)
-
-        worker_target = mock_worker_process if profile == "testing" else transcriber_worker_process
-        worker_name_prefix = "MockWorker" if profile == "testing" else "TranscriberWorker"
-
-        if profile == "testing":
-            logger.info("偵測到 'testing' 環境，將啟動模擬工人。")
-        else:
-            logger.info("將啟動真實的轉錄工人。")
-
-        for i in range(num_workers):
-            # 注意：不再需要傳遞 log_queue
-            worker_process_instance = mp.Process(
-                target=worker_target,
-                args=(app.state.task_queue, app.state.result_queue, config),
-                name=f"{worker_name_prefix}-{i+1}"
-            )
-            processes.append(worker_process_instance)
-
-        for p in processes:
-            p.daemon = True
-            logger.info(f"正在啟動 {p.name} 行程...")
-            p.start()
-
-        logger.info("所有核心服務已啟動。主行程將保持運行以監控子行程。")
-        logger.info("按 Ctrl+C 以終止所有服務。")
-
-        while True:
-            time.sleep(1)
-            for p in processes:
-                if not p.is_alive():
-                    logger.warning(f"行程 {p.name} (PID: {p.pid}) 已意外終止！")
-                    logger.warning(f"行程 {p.name} 的 exitcode 是: {p.exitcode}")
-                    raise RuntimeError(f"{p.name} 已終止")
-
-    except (KeyboardInterrupt, RuntimeError) as e:
-        if isinstance(e, KeyboardInterrupt):
-            logger.info("收到使用者中斷信號 (Ctrl+C)。")
-        else:
-            logger.error(f"偵測到嚴重錯誤，將關閉所有服務: {e}")
-
-    finally:
-        logger.info("開始執行關閉程序...")
-        for p in reversed(processes):
-            if p.is_alive():
-                logger.info(f"正在終止 {p.name}...")
-                p.terminate()
-                p.join(timeout=5)
-
-        logger.info("所有服務已關閉。再會。")
-
-
-@cli.command(name="run-server")
-@click.option(
-    "--profile",
-    type=click.Choice(["testing", "production"], case_sensitive=False),
-    default="production",
-    help="選擇要使用的作戰配置 (預設: production)"
-)
-@click.option(
-    "--num-workers",
-    type=int,
-    default=1,
-    help="要啟動的轉寫工人數量 (預設: 1)"
-)
-def run_server(profile, num_workers):
-    """
-    啟動 API 伺服器以及對應的背景工人行程。
-    """
-    click.echo(f"==> 準備以 '{profile}' 配置啟動服務...")
-    click.echo(f"==> 將啟動 {num_workers} 個轉寫工人...")
-    if sys.platform == "darwin":
-        mp.set_start_method("spawn", force=True)
-    else:
-        mp.set_start_method("spawn", force=True) # 在 Linux 上也建議使用 spawn
-
-    launcher_main(profile, num_workers)
-
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - [%(levelname)s] - %(name)s - %(message)s')
 
 @cli.command(name="install-deps")
 def install_deps():
@@ -204,7 +36,10 @@ def run_tests():
     """
     click.echo("==> 正在啟動 pytest...")
     try:
-        subprocess.check_call(["poetry", "run", "pytest", "-v"])
+        # 確保 src 在 PYTHONPATH 中，以便 pytest 能找到模組
+        env = os.environ.copy()
+        env["PYTHONPATH"] = "."
+        subprocess.check_call(["poetry", "run", "pytest", "-v"], env=env)
         click.secho("==> 所有測試皆已通過。", fg="green")
     except subprocess.CalledProcessError:
         click.secho("==> 部分或全部測試失敗。", fg="red")
@@ -212,8 +47,6 @@ def run_tests():
     except FileNotFoundError:
         click.secho("==> 錯誤: 'poetry' 未找到或專案未初始化。", fg="red")
         sys.exit(1)
-
-
 
 if __name__ == "__main__":
     cli()

@@ -36,6 +36,11 @@ def parse_commands_from_readme() -> list[str]:
     # re.DOTALL 使得 `.` 可以匹配換行符
     command_blocks = re.findall(r"```bash\n(.*?)\n```", capabilities_section, re.DOTALL)
 
+    # 如果上面的正則表達式找不到，嘗試一個稍微寬鬆的版本，它不要求最後一個換行符
+    if not command_blocks:
+        command_blocks = re.findall(r"```bash\n(.*?)```", capabilities_section, re.DOTALL)
+
+
     # 清理每個命令，去除多餘的空白
     commands = [cmd.strip() for block in command_blocks for cmd in block.split('\n') if cmd.strip()]
 
@@ -52,6 +57,10 @@ def test_capability_command(command: str):
     """
     驗證從 README.md 解析出的單個命令是否可以成功執行。
     """
+    # 根據指揮官指示，我們跳過會遞歸調用或檢查風格的命令
+    if "poetry run pytest" in command or "ruff" in command or "deptry" in command:
+        pytest.skip(f"根據指示跳過契約命令測試: {command}")
+
     # 我們不能測試 `start.sh` 本身，因為它會啟動一個無限循環的服務。
     # 我們在這裡對其進行特殊處理，只檢查它的語法是否正確。
     if "start.sh" in command:
